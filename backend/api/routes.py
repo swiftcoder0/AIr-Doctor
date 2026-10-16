@@ -1,0 +1,595 @@
+import uuid
+from datetime import datetime
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Response
+from sqlalchemy.orm import Session
+from backend.database import get_db
+from backend.config import DATA_CLASSIFICATION, MAX_UPLOAD_SIZE_BYTES, ALLOWED_CSV_EXTENSIONS
+from backend.models import (
+    BaseInfoORM,
+    AircraftORM,
+    SparePartORM,
+    TechnicianORM,
+    MaintenanceBayORM,
+    WorkOrderORM,
+    ImportBatchORM,
+    DataTrustRecordORM,
+    DecisionLedgerORM,
+)
+from backend.schemas import (
+    BaseInfo,
+    FleetSummary,
+    FleetTableItem,
+    AircraftData,
+    SparePart,
+    Technician,
+    MaintenanceBay,
+    WorkOrder,
+    WorkOrderCreate,
+    WorkOrderUpdate,
+    ImportHistoryItem,
+    DataTrustRecord,
+    DecisionLedgerEntry,
+    CreateDecisionRequest,
+    WhatIfRequest,
+    WhatIfResult,
+    OptimizerRecommendation,
+    CsvPreviewResponse,
+    CsvCommitRequest,
+    CsvCommitResponse,
+    ChatQueryRequest,
+    ChatQueryResponse,
+)
+from backend.services.fleet_service import (
+    get_all_bases,
+    get_fleet_summary,
+    get_fleet_table,
+    get_aircraft_health_detail,
+    get_3d_aircraft_list,
+)
+from backend.services.csv_service import parse_and_validate_csv, commit_csv_import
+from backend.services.optimizer_service import calculate_what_if_simulation, get_default_optimizer_recommendation
+from backend.services.chat_service import answer_ai_assistant_query
+
+router = APIRouter(prefix="/api")
+
+# -------------------------------------------------------------
+# 1. Health & Liveness
+# -------------------------------------------------------------
+@router.get("/healthz", tags=["System"])
+def get_healthz(db: Session = Depends(get_db)):
+    """Liveness check reporting status and synthetic classification."""
+    bases_count = db.query(BaseInfoORM).count()
+    aircraft_count = db.query(AircraftORM).count()
+    return {
+        "status": "ok",
+        "service": "AirDoctor Persistent FastAPI Backend",
+        "version": "2.0.0",
+        "data_classification": DATA_CLASSIFICATION,
+        "database": "SQLite (Persistent)",
+        "total_bases": bases_count,
+        "total_aircraft": aircraft_count,
+    }
+
+# -------------------------------------------------------------
+# 2. Bases & Fleet Command Center
+# -------------------------------------------------------------
+@router.get("/bases", response_model=List[BaseInfo], tags=["Fleet"])
+def list_bases(db: Session = Depends(get_db)):
+    """Returns all operational bases (Central HQ, Base Alpha, Base Bravo)."""
+    return get_all_bases(db)
+
+@router.get("/fleet/summary", response_model=FleetSummary, tags=["Fleet"])
+def fleet_summary(base_id: Optional[str] = Query("all", alias="base_id"), db: Session = Depends(get_db)):
+    """Calculates fleet readiness summary, total, ready, maintenance and attention counts."""
+    return get_fleet_summary(db, base_id=base_id)
+
+@router.get("/aircraft", response_model=List[FleetTableItem], tags=["Fleet"])
+def list_aircraft(
+    base_id: Optional[str] = Query("all"),
+    type_filter: Optional[str] = Query("All"),
+    db: Session = Depends(get_db),
+):
+    """Lists fleet table items with base and aircraft type filters."""
+    return get_fleet_table(db, base_id=base_id, type_filter=type_filter)
+
+@router.get("/aircraft/3d", response_model=List[AircraftData], tags=["Fleet"])
+def list_3d_aircraft(base_id: Optional[str] = Query("all"), db: Session = Depends(get_db)):
+    """Returns 3D digital twin aircraft models (Rafale and Tejas) with 10 interactive hotspots."""
+    return get_3d_aircraft_list(db, base_id=base_id)
+
+@router.get("/aircraft/{aircraft_id}/health", response_model=AircraftData, tags=["Fleet"])
+def get_aircraft_health(
+    aircraft_id: str,
+    future_hours: Optional[int] = Query(0),
+    db: Session = Depends(get_db),
+):
+    """Returns component health and deterministic degradation projections (Now, +10h, +25h, +50h)."""
+    detail = get_aircraft_health_detail(db, aircraft_id=aircraft_id, future_hours=future_hours)
+    if not detail:
+        raise HTTPException(status_code=404, detail=f"Aircraft '{aircraft_id}' not found.")
+    return detail
+
+# -------------------------------------------------------------
+# 3. CSV Import & Data Trust
+# -------------------------------------------------------------
+@router.post("/imports/preview", response_model=CsvPreviewResponse, tags=["Imports"])
+async def preview_csv_import(
+    file: Optional[UploadFile] = File(None),
+    category: str = Form(...),
+    base_id: str = Form(...),
+    csv_text: Optional[str] = Form(None),
+):
+    """
+    Parses and validates CSV content for required headers, types, units, and duplicates.
+    Provides row-level errors and preview before committing.
+    """
+    content = ""
+    if file:
+        filename = file.filename or ""
+        ext = "." + filename.split(".")[-1].lower() if "." in filename else ""
+        if ext not in ALLOWED_CSV_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"Unsafe file extension '{ext}'. Only CSV/TXT accepted.")
+        
+        raw_bytes = await file.read()
+        if len(raw_bytes) > MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(status_code=400, detail="File exceeds maximum allowed size (5 MB).")
+        
+        try:
+            content = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            content = raw_bytes.decode("latin-1")
+    elif csv_text:
+        content = csv_text
+    else:
+        raise HTTPException(status_code=400, detail="No file or CSV text content provided.")
+
+    return parse_and_validate_csv(file_content=content, category=category, base_id=base_id)
+
+@router.post("/imports/commit", response_model=CsvCommitResponse, tags=["Imports"])
+def commit_import(request: CsvCommitRequest, db: Session = Depends(get_db)):
+    """Commits validated CSV rows into persistent SQLite storage and logs the audit event."""
+    return commit_csv_import(
+        db=db,
+        base_id=request.base_id,
+        category=request.category,
+        filename=request.filename,
+        rows=request.rows,
+    )
+
+@router.get("/imports", response_model=List[ImportHistoryItem], tags=["Imports"])
+def list_import_history(base_id: Optional[str] = Query("all"), db: Session = Depends(get_db)):
+    """Lists persistent import history batches."""
+    query = db.query(ImportBatchORM)
+    if base_id != "all":
+        query = query.filter(ImportBatchORM.base_id == base_id)
+    batches = query.order_by(ImportBatchORM.timestamp.desc()).all()
+    return [
+        ImportHistoryItem(
+            id=b.id,
+            timestamp=b.timestamp,
+            baseId=b.base_id,
+            baseName=b.base_name,
+            category=b.category,
+            filename=b.filename,
+            recordsCount=b.records_count,
+            validCount=b.valid_count,
+            flaggedCount=b.flagged_count,
+            status=b.status,
+        )
+        for b in batches
+    ]
+
+@router.get("/trust/records", response_model=List[DataTrustRecord], tags=["Data Trust"])
+def list_trust_records(
+    base_id: Optional[str] = Query("all"),
+    grade: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Returns persistent Data Trust quality records and audit findings."""
+    query = db.query(DataTrustRecordORM)
+    if base_id != "all":
+        query = query.filter(DataTrustRecordORM.base_id == base_id)
+    if grade:
+        query = query.filter(DataTrustRecordORM.quality_grade == grade)
+    if status:
+        query = query.filter(DataTrustRecordORM.verification_status == status)
+    
+    records = query.all()
+    out = []
+    for r in records:
+        issues = []
+        try:
+            issues = eval(r.detected_issues_json) if r.detected_issues_json else []
+        except Exception:
+            pass
+        payload = {}
+        try:
+            payload = eval(r.payload_json) if r.payload_json else {}
+        except Exception:
+            pass
+
+        out.append(DataTrustRecord(
+            id=r.id,
+            baseId=r.base_id,
+            category=r.category,
+            record_id=r.record_id,
+            source_system=r.source_system,
+            timestamp=r.timestamp,
+            quality_grade=r.quality_grade,
+            requires_human_verification=r.requires_human_verification,
+            verification_status=r.verification_status,
+            detected_issues=issues if isinstance(issues, list) else [],
+            ground_truth_label=r.ground_truth_label,
+            payload=payload if isinstance(payload, dict) else {},
+        ))
+    return out
+
+@router.post("/trust/{record_id}/verify", tags=["Data Trust"])
+def verify_trust_record(record_id: str, reviewer: str = "Air Commander", db: Session = Depends(get_db)):
+    """Marks a Data Trust record as VERIFIED and records an entry in the Decision Ledger."""
+    rec = db.query(DataTrustRecordORM).filter(DataTrustRecordORM.id == record_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail=f"Data Trust Record '{record_id}' not found.")
+    
+    old_status = rec.verification_status
+    rec.verification_status = "VERIFIED"
+    rec.requires_human_verification = False
+    rec.quality_grade = "B" if rec.quality_grade in ["C", "D"] else rec.quality_grade
+
+    # Log to Decision Ledger
+    ledger = DecisionLedgerORM(
+        id=f"dec-{uuid.uuid4().hex[:6]}",
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        actor=reviewer,
+        action="VERIFY_DATA_TRUST_RECORD",
+        previous_state=f"{rec.record_id}: {old_status}",
+        resulting_state=f"{rec.record_id}: VERIFIED",
+        notes=f"Human reviewer verified telemetry/inventory integrity for {rec.record_id}.",
+        base_id=rec.base_id,
+        is_override=False,
+    )
+    db.add(ledger)
+    db.commit()
+    return {"status": "ok", "record_id": record_id, "verification_status": "VERIFIED"}
+
+@router.post("/trust/{record_id}/reject", tags=["Data Trust"])
+def reject_trust_record(record_id: str, reviewer: str = "Air Commander", db: Session = Depends(get_db)):
+    """Marks a Data Trust record as REJECTED and records an entry in the Decision Ledger."""
+    rec = db.query(DataTrustRecordORM).filter(DataTrustRecordORM.id == record_id).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail=f"Data Trust Record '{record_id}' not found.")
+    
+    old_status = rec.verification_status
+    rec.verification_status = "REJECTED"
+    rec.requires_human_verification = False
+
+    ledger = DecisionLedgerORM(
+        id=f"dec-{uuid.uuid4().hex[:6]}",
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        actor=reviewer,
+        action="REJECT_ANOMALOUS_DATA_RECORD",
+        previous_state=f"{rec.record_id}: {old_status}",
+        resulting_state=f"{rec.record_id}: REJECTED",
+        notes=f"Rejected anomalous telemetry record {rec.record_id} from training and analytics ingestion.",
+        base_id=rec.base_id,
+        is_override=False,
+    )
+    db.add(ledger)
+    db.commit()
+    return {"status": "ok", "record_id": record_id, "verification_status": "REJECTED"}
+
+# -------------------------------------------------------------
+# 4. Inventory, Technicians & Bays
+# -------------------------------------------------------------
+@router.get("/inventory", response_model=List[SparePart], tags=["Logistics"])
+def get_inventory(base_id: Optional[str] = Query("all"), db: Session = Depends(get_db)):
+    """Returns spare parts catalog and current warehouse stock across bases."""
+    query = db.query(SparePartORM)
+    if base_id != "all":
+        query = query.filter(SparePartORM.base_id == base_id)
+    spares = query.all()
+    return [
+        SparePart(
+            id=s.id,
+            partNumber=s.part_number,
+            name=s.name,
+            applicableSubsystem=s.applicable_subsystem,
+            baseId=s.base_id,
+            quantityOnHand=s.quantity_on_hand,
+            stockAlpha=s.stock_alpha,
+            stockBravo=s.stock_bravo,
+            minimumRequired=s.minimum_required,
+            shortageStatus=s.shortage_status,
+            supplierLeadTime=s.supplier_lead_time,
+            supplierLeadTimeDays=s.supplier_lead_time_days,
+            crossBaseAvailableQty=s.cross_base_available_qty,
+            crossBaseTransferHours=s.cross_base_transfer_hours,
+            crossBaseSource=s.cross_base_source,
+            compatibleAircraft=s.compatible_aircraft,
+            condition=s.condition,
+        )
+        for s in spares
+    ]
+
+@router.get("/technicians", response_model=List[Technician], tags=["Logistics"])
+def get_technicians(base_id: Optional[str] = Query("all"), db: Session = Depends(get_db)):
+    """Returns technician workforce roster, trades, shifts, and current availability."""
+    query = db.query(TechnicianORM)
+    if base_id != "all":
+        query = query.filter(TechnicianORM.base_id == base_id)
+    techs = query.all()
+    return [
+        Technician(
+            id=t.id,
+            name=t.name,
+            badgeNumber=t.badge_number,
+            trade=t.trade,
+            baseId=t.base_id,
+            status=t.status,
+            assignedAircraft=t.assigned_aircraft,
+            shift=t.shift,
+        )
+        for t in techs
+    ]
+
+@router.get("/bays", response_model=List[MaintenanceBay], tags=["Logistics"])
+def get_maintenance_bays(base_id: Optional[str] = Query("all"), db: Session = Depends(get_db)):
+    """Returns maintenance bay occupancy and turn times across bases."""
+    query = db.query(MaintenanceBayORM)
+    if base_id != "all":
+        query = query.filter(MaintenanceBayORM.base_id == base_id)
+    bays = query.all()
+    return [
+        MaintenanceBay(
+            id=b.id,
+            name=b.name,
+            baseId=b.base_id,
+            type=b.type,
+            status=b.status,
+            occupiedByAircraft=b.occupied_by_aircraft,
+            activeJob=b.active_job,
+            estimatedFreeTime=b.estimated_free_time,
+        )
+        for b in bays
+    ]
+
+# -------------------------------------------------------------
+# 5. Work Orders
+# -------------------------------------------------------------
+def _to_work_order_schema(w: WorkOrderORM) -> WorkOrder:
+    return WorkOrder(
+        id=w.id,
+        aircraft=w.aircraft,
+        component=w.component,
+        type=w.type,
+        status=w.status,
+        scheduledDate=w.scheduled_date,
+        estHours=w.est_hours,
+        priority=w.priority,
+        baseId=w.base_id,
+        delayReason=w.delay_reason,
+        assignedBay=w.assigned_bay,
+        assignedTech=w.assigned_tech,
+        requiredSpare=w.required_spare,
+    )
+
+@router.get("/work-orders", response_model=List[WorkOrder], tags=["Work Orders"])
+def list_work_orders(
+    base_id: Optional[str] = Query("all"),
+    status: Optional[str] = Query("All"),
+    search: Optional[str] = Query(""),
+    db: Session = Depends(get_db),
+):
+    """Lists maintenance work orders with base, status and text search filtering."""
+    query = db.query(WorkOrderORM)
+    if base_id != "all":
+        query = query.filter(WorkOrderORM.base_id == base_id)
+    if status != "All":
+        query = query.filter(WorkOrderORM.status == status)
+    if search:
+        q = f"%{search.lower()}%"
+        query = query.filter(
+            WorkOrderORM.id.ilike(q) | WorkOrderORM.aircraft.ilike(q) | WorkOrderORM.component.ilike(q)
+        )
+    return [_to_work_order_schema(w) for w in query.all()]
+
+@router.post("/work-orders", response_model=WorkOrder, tags=["Work Orders"])
+def create_work_order(wo_in: WorkOrderCreate, db: Session = Depends(get_db)):
+    """Creates a new maintenance work order and records the decision in the audit ledger."""
+    total_existing = db.query(WorkOrderORM).count()
+    new_id = f"WO-{1043 + total_existing}"
+    
+    wo = WorkOrderORM(
+        id=new_id,
+        aircraft=wo_in.aircraft,
+        component=wo_in.component,
+        type=wo_in.type,
+        status=wo_in.status,
+        scheduled_date=wo_in.scheduledDate,
+        est_hours=wo_in.estHours,
+        priority=wo_in.priority,
+        base_id=wo_in.baseId,
+        delay_reason=wo_in.delayReason,
+        assigned_bay=wo_in.assignedBay,
+        assigned_tech=wo_in.assignedTech,
+        required_spare=wo_in.requiredSpare,
+    )
+    db.add(wo)
+
+    # Log to Decision Ledger
+    ledger = DecisionLedgerORM(
+        id=f"dec-{uuid.uuid4().hex[:6]}",
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        actor="Air Commander",
+        action="CREATE_WORK_ORDER",
+        previous_state=f"{wo_in.aircraft}: Unscheduled",
+        resulting_state=f"{new_id}: {wo_in.status} ({wo_in.component})",
+        notes=f"Created work order for {wo_in.aircraft} {wo_in.component}. Est hours: {wo_in.estHours}h.",
+        base_id=wo_in.baseId,
+        is_override=False,
+    )
+    db.add(ledger)
+    db.commit()
+    db.refresh(wo)
+    return _to_work_order_schema(wo)
+
+@router.patch("/work-orders/{work_order_id}", response_model=WorkOrder, tags=["Work Orders"])
+def update_work_order(work_order_id: str, updates: WorkOrderUpdate, db: Session = Depends(get_db)):
+    """Updates an existing work order's schedule or status, recording the action in the audit ledger."""
+    wo = db.query(WorkOrderORM).filter(WorkOrderORM.id == work_order_id).first()
+    if not wo:
+        raise HTTPException(status_code=404, detail=f"Work Order '{work_order_id}' not found.")
+    
+    old_state = f"{wo.id}: {wo.scheduled_date} ({wo.status})"
+    update_data = updates.model_dump(exclude_unset=True)
+    
+    for key, val in update_data.items():
+        if key == "scheduledDate":
+            wo.scheduled_date = val
+        elif key == "estHours":
+            wo.est_hours = val
+        elif key == "baseId":
+            wo.base_id = val
+        elif key == "delayReason":
+            wo.delay_reason = val
+        elif key == "assignedBay":
+            wo.assigned_bay = val
+        elif key == "assignedTech":
+            wo.assigned_tech = val
+        elif key == "requiredSpare":
+            wo.required_spare = val
+        elif hasattr(wo, key):
+            setattr(wo, key, val)
+
+    new_state = f"{wo.id}: {wo.scheduled_date} ({wo.status})"
+    ledger = DecisionLedgerORM(
+        id=f"dec-{uuid.uuid4().hex[:6]}",
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        actor="AI Maintenance Planner / Air Commander",
+        action="UPDATE_WORK_ORDER_SCHEDULE",
+        previous_state=old_state,
+        resulting_state=new_state,
+        notes=f"Updated work order {work_order_id} parameters: {list(update_data.keys())}.",
+        base_id=wo.base_id,
+        is_override=False,
+    )
+    db.add(ledger)
+    db.commit()
+    db.refresh(wo)
+    return _to_work_order_schema(wo)
+
+# -------------------------------------------------------------
+# 6. Resource Recovery Optimizer
+# -------------------------------------------------------------
+@router.get("/optimizer/compare", response_model=OptimizerRecommendation, tags=["Optimizer"])
+def get_optimizer_compare():
+    """Returns baseline vs recommended resource scenario with recovered aircraft-days."""
+    return get_default_optimizer_recommendation()
+
+@router.post("/optimizer/simulate", response_model=WhatIfResult, tags=["Optimizer"])
+@router.post("/plan/whatif", response_model=WhatIfResult, tags=["Optimizer"])
+def simulate_optimizer_scenario(req: WhatIfRequest):
+    """Executes deterministic What-If simulation comparing spares, technicians, and bays."""
+    return calculate_what_if_simulation(req)
+
+# -------------------------------------------------------------
+# 7. Decision Ledger & Audit
+# -------------------------------------------------------------
+@router.get("/ledger", response_model=List[DecisionLedgerEntry], tags=["Ledger"])
+def get_ledger(base_id: Optional[str] = Query("all"), db: Session = Depends(get_db)):
+    """Returns immutable audit trail of maintenance decisions, overrides, and CSV imports."""
+    query = db.query(DecisionLedgerORM)
+    if base_id != "all":
+        query = query.filter((DecisionLedgerORM.base_id == base_id) | (DecisionLedgerORM.base_id == "all"))
+    entries = query.order_by(DecisionLedgerORM.timestamp.desc()).all()
+    return [
+        DecisionLedgerEntry(
+            id=e.id,
+            timestamp=e.timestamp,
+            actor=e.actor,
+            action=e.action,
+            previous_state=e.previous_state,
+            resulting_state=e.resulting_state,
+            notes=e.notes,
+            scenario_id=e.scenario_id,
+            baseId=e.base_id,
+            isOverride=e.is_override,
+            overrideReason=e.override_reason,
+        )
+        for e in entries
+    ]
+
+@router.post("/ledger/decision", response_model=DecisionLedgerEntry, tags=["Ledger"])
+def record_decision(req: CreateDecisionRequest, db: Session = Depends(get_db)):
+    """Appends an immutable audit event to the Decision Ledger."""
+    entry = DecisionLedgerORM(
+        id=f"dec-{uuid.uuid4().hex[:6]}",
+        timestamp=datetime.utcnow().isoformat() + "Z",
+        actor=req.actor,
+        action=req.action,
+        previous_state=req.previous_state,
+        resulting_state=req.resulting_state,
+        notes=req.notes,
+        scenario_id=req.scenario_id,
+        base_id=req.baseId,
+        is_override=req.isOverride or False,
+        override_reason=req.overrideReason,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return DecisionLedgerEntry(
+        id=entry.id,
+        timestamp=entry.timestamp,
+        actor=entry.actor,
+        action=entry.action,
+        previous_state=entry.previous_state,
+        resulting_state=entry.resulting_state,
+        notes=entry.notes,
+        scenario_id=entry.scenario_id,
+        baseId=entry.base_id,
+        isOverride=entry.is_override,
+        overrideReason=entry.override_reason,
+    )
+
+@router.get("/ledger/export/csv", tags=["Ledger"])
+def export_ledger_csv(base_id: Optional[str] = Query("all"), db: Session = Depends(get_db)):
+    """Exports the decision ledger to a downloadable CSV file."""
+    query = db.query(DecisionLedgerORM)
+    if base_id != "all":
+        query = query.filter((DecisionLedgerORM.base_id == base_id) | (DecisionLedgerORM.base_id == "all"))
+    entries = query.order_by(DecisionLedgerORM.timestamp.desc()).all()
+
+    import csv
+    import io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Timestamp (UTC)", "Actor", "Action", "Base", "Previous State", "Resulting State", "Notes", "Is Override", "Override Reason"])
+    for e in entries:
+        writer.writerow([
+            e.id,
+            e.timestamp,
+            e.actor,
+            e.action,
+            e.base_id or "all",
+            e.previous_state,
+            e.resulting_state,
+            e.notes,
+            "TRUE" if e.is_override else "FALSE",
+            e.override_reason or "",
+        ])
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=airdoctor_decision_ledger.csv"}
+    )
+
+# -------------------------------------------------------------
+# 8. AI Assistant Chat
+# -------------------------------------------------------------
+@router.post("/chat/query", response_model=ChatQueryResponse, tags=["AI Assistant"])
+def chat_query(req: ChatQueryRequest, db: Session = Depends(get_db)):
+    """Queries AI Assistant against real current database records and calculations."""
+    return answer_ai_assistant_query(db=db, user_prompt=req.prompt, base_id=req.base_id)
