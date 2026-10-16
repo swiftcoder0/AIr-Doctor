@@ -1,5 +1,11 @@
 # AirDoctor — Aircraft Health & Readiness Intelligence
 
+[![Deploy AirDoctor to GitHub Pages](https://github.com/swiftcoder0/AIr-Doctor/actions/workflows/deploy.yml/badge.svg)](https://github.com/swiftcoder0/AIr-Doctor/actions/workflows/deploy.yml)
+[![Live Site](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-blue)](https://swiftcoder0.github.io/AIr-Doctor/)
+
+**Live Application Demo:** [https://swiftcoder0.github.io/AIr-Doctor/](https://swiftcoder0.github.io/AIr-Doctor/)  
+**Repository:** [https://github.com/swiftcoder0/AIr-Doctor](https://github.com/swiftcoder0/AIr-Doctor)
+
 **Classification Notice:** `SYNTHETIC / UNCLASSIFIED DATA` — This software is a non-operational prototype demonstration system. All aircraft designations, tail numbers, sensor readings, failure trends, supply quantities, and readiness models are fictional.
 
 ---
