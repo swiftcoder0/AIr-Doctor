@@ -1,6 +1,13 @@
-import React, { useState } from 'react';
-import { Search, Bell, X, ShieldCheck, ChevronDown, User, Lock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Bell, X, ShieldCheck, ChevronDown, User, Lock, Activity } from 'lucide-react';
 import { BaseId, UserRole } from '../../types/aircraft';
+import {
+  ConnectionStatus,
+  getConnectionStatus,
+  subscribeConnectionStatus,
+  api,
+  API_BASE_URL,
+} from '../../services/apiClient';
 
 interface HeaderProps {
   searchQuery: string;
@@ -22,6 +29,12 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+  const [connStatus, setConnStatus] = useState<ConnectionStatus>(() => getConnectionStatus());
+
+  useEffect(() => {
+    api.checkBackendLiveness();
+    return subscribeConnectionStatus(setConnStatus);
+  }, []);
 
   const roleLabels: Record<UserRole, { name: string; title: string; badge: string; color: string }> = {
     Commander: {
@@ -75,8 +88,44 @@ export const Header: React.FC<HeaderProps> = ({
         SYNTHETIC / UNCLASSIFIED DATA — SIMULATED DEMO WORKFLOW
       </div>
 
-      {/* Right Controls: Security Shield, Notifications & RBAC Role Switcher */}
+      {/* Right Controls: Connection Status, Security Shield, Notifications & RBAC Role Switcher */}
       <div className="flex items-center gap-3">
+        {/* Backend Connection Indicator (Requirement 3) */}
+        <div
+          onClick={() => api.checkBackendLiveness()}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all shadow-2xs ${
+            connStatus === 'connected'
+              ? 'bg-emerald-50/90 text-emerald-800 border-emerald-300'
+              : connStatus === 'fallback'
+              ? 'bg-amber-50/90 text-amber-800 border-amber-300'
+              : 'bg-slate-50 text-slate-600 border-slate-200'
+          }`}
+          title={
+            connStatus === 'connected'
+              ? `Live API Connected (${API_BASE_URL}). Click to re-probe.`
+              : connStatus === 'fallback'
+              ? 'Backend API unreachable. Operating in local demo simulation mode. Click to retry connection.'
+              : 'Probing backend connection...'
+          }
+        >
+          <span
+            className={`w-2 h-2 rounded-full shrink-0 ${
+              connStatus === 'connected'
+                ? 'bg-emerald-500 animate-pulse'
+                : connStatus === 'fallback'
+                ? 'bg-amber-500'
+                : 'bg-slate-400 animate-ping'
+            }`}
+          />
+          <span className="font-mono text-[11px] font-bold hidden sm:inline">
+            {connStatus === 'connected'
+              ? 'API: Live (Render)'
+              : connStatus === 'fallback'
+              ? 'API: Demo Fallback'
+              : 'API: Connecting...'}
+          </span>
+        </div>
+
         {/* Security Shield & MFA Pill (Task 2) */}
         <button
           onClick={onOpenSecurityModal}

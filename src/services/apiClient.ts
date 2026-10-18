@@ -24,8 +24,36 @@ import {
 } from '../types/aircraft';
 import { mockAirDoctorService } from './mockAirDoctorService';
 
-const rawBase = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-const API_BASE_URL = rawBase.endsWith('/api') ? rawBase : `${rawBase.replace(/\/+$/, '')}/api`;
+const defaultBase = import.meta.env.PROD
+  ? 'https://air-doctor.onrender.com'
+  : 'http://127.0.0.1:8000';
+const rawBase = import.meta.env.VITE_API_URL || defaultBase;
+export const API_BASE_URL = rawBase.endsWith('/api') ? rawBase : `${rawBase.replace(/\/+$/, '')}/api`;
+
+export type ConnectionStatus = 'connected' | 'fallback' | 'checking';
+
+let currentConnectionStatus: ConnectionStatus = 'checking';
+const connectionListeners: Array<(status: ConnectionStatus) => void> = [];
+
+export function getConnectionStatus(): ConnectionStatus {
+  return currentConnectionStatus;
+}
+
+export function subscribeConnectionStatus(listener: (status: ConnectionStatus) => void): () => void {
+  connectionListeners.push(listener);
+  listener(currentConnectionStatus);
+  return () => {
+    const idx = connectionListeners.indexOf(listener);
+    if (idx !== -1) connectionListeners.splice(idx, 1);
+  };
+}
+
+function setConnectionStatus(status: ConnectionStatus) {
+  if (currentConnectionStatus !== status) {
+    currentConnectionStatus = status;
+    connectionListeners.forEach((l) => l(status));
+  }
+}
 
 let activeUserRole: UserRole = 'Commander';
 
@@ -39,27 +67,43 @@ export function getActiveUserRole(): UserRole {
 
 async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      'X-AirDoctor-Role': activeUserRole,
-      ...options?.headers,
-    },
-    ...options,
-  });
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-AirDoctor-Role': activeUserRole,
+        ...options?.headers,
+      },
+      ...options,
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API Error [${response.status}] ${response.statusText}: ${errorText}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API Error [${response.status}] ${response.statusText}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    setConnectionStatus('connected');
+    return data;
+  } catch (err) {
+    setConnectionStatus('fallback');
+    throw err;
   }
-
-  return response.json();
 }
 
 export const api = {
-  // Liveness
+  // Liveness & Probe
   async getHealthz(): Promise<{ status: string; database: string }> {
     return fetchJson('/healthz');
+  },
+
+  async checkBackendLiveness(): Promise<boolean> {
+    try {
+      await fetchJson('/healthz');
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   // Bases

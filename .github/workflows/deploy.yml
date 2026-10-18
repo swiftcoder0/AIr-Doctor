@@ -36,7 +36,7 @@ jobs:
       - name: Build frontend
         env:
           GITHUB_PAGES: "true"
-          VITE_API_URL: ${{ vars.VITE_API_URL || secrets.VITE_API_URL || '' }}
+          VITE_API_URL: ${{ vars.VITE_API_URL || secrets.VITE_API_URL || 'https://air-doctor.onrender.com' }}
         run: npm run build
 
       - name: Setup Pages
