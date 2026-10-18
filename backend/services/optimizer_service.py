@@ -5,21 +5,28 @@ def calculate_what_if_simulation(req: WhatIfRequest) -> WhatIfResult:
     """
     Evaluates resource adjustments (spares, techs, bays, cross-base transfer)
     and computes recovered hours, aircraft-days, and projected fleet readiness.
+    Takes into account donor base impact on cross-base transfers.
     """
     baseline_ready_hours = 96
     effective_lead_time_hours = 96
     repair_duration = 12
 
+    # 1. Spares & Cross-Base Transfer
     if req.cross_base_transfer:
-        effective_lead_time_hours = 14
+        effective_lead_time_hours = 14  # Inter-base transit delivery
 
-    hp_added = req.delta_spares.get("HP-9042", 0)
+    hp_added = req.delta_spares.get("HP-9042", 0) or sum(req.delta_spares.values())
     if hp_added > 0:
-        effective_lead_time_hours = 0
+        effective_lead_time_hours = 0  # Expedited local stock
 
-    extra_techs = req.delta_technicians.get("Hydraulics Specialist", 0)
+    # 2. Qualified Technicians
+    extra_techs = req.delta_technicians.get("Hydraulics Specialist", 0) or sum(req.delta_technicians.values())
     if extra_techs > 0:
-        repair_duration = max(8, repair_duration - 4)
+        repair_duration = max(8, repair_duration - 4)  # Parallel servicing
+
+    # 3. Maintenance Bays
+    if req.delta_bays > 0:
+        repair_duration = max(6, repair_duration - 2)  # Dedicated bay access eliminates turn wait
 
     projected_ready_hours = effective_lead_time_hours + repair_duration
     hours_recovered = max(0, baseline_ready_hours - projected_ready_hours)
@@ -35,25 +42,33 @@ def calculate_what_if_simulation(req: WhatIfRequest) -> WhatIfResult:
     if effective_lead_time_hours > 24:
         active_bottleneck = f"Commercial Supplier Lead Time ({effective_lead_time_hours}h)"
     elif effective_lead_time_hours > 0:
-        active_bottleneck = f"Inter-Base Transit Time ({effective_lead_time_hours}h)"
+        active_bottleneck = f"Inter-Base Transit Time ({effective_lead_time_hours}h) — Donor Base Alpha buffer reduced to 0"
+    elif req.delta_bays == 0:
+        active_bottleneck = "Hangar Bay Scheduling Queue (Pacing constraint)"
     else:
         active_bottleneck = "None (Pacing within nominal flightline timeline)"
 
     scenario_name = (
-        "Cross-Base Transfer Scenario"
+        "Cross-Base Transfer Scenario (Alpha -> Bravo)"
         if req.cross_base_transfer
         else "Expedited Local Spare Allocation"
         if hp_added > 0
+        else "Dedicated Maintenance Bay Allocation"
+        if req.delta_bays > 0
         else "Dual-Specialist Pairing"
         if extra_techs > 0
         else "Modified Logistics Schedule"
     )
 
     cost_impact = (
-        "₹ 45,000 (Internal courier airlift)"
+        "₹ 45,000 (Internal courier airlift; reduces donor Base Alpha buffer from 1 to 0 for 72h)"
         if req.cross_base_transfer
         else "₹ 1,80,000 (Commercial expedite fee)"
         if hp_added > 0
+        else "₹ 30,000 (Bay rescheduling & equipment priority)"
+        if req.delta_bays > 0
+        else "₹ 15,000 (Technician overtime)"
+        if extra_techs > 0
         else "₹ 0 (Nominal baseline)"
     )
 

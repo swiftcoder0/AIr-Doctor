@@ -61,10 +61,36 @@ def test_persistence_across_restarts():
                 pass
 
 def test_chat_assistant_dynamic_query(client):
-    # Query AI assistant about HP-9042
+    # 1. Query AI assistant about HP-9042
     resp = client.post("/api/chat/query", json={"prompt": "Is HP-9042 available?", "base_id": "all"})
     assert resp.status_code == 200
     data = resp.json()
     assert "HP-9042" in data["text"] or (data.get("cardData") and "HP-9042" in data["cardData"]["title"])
     assert data["cardData"] is not None
     assert len(data["cardData"]["specs"]) >= 3
+
+    # 2. Query technicians workforce
+    resp_tech = client.post("/api/chat/query", json={"prompt": "Are any technicians available?", "base_id": "all"})
+    assert resp_tech.status_code == 200
+    data_tech = resp_tech.json()
+    assert "technicians" in data_tech["text"].lower()
+    assert data_tech["cardData"]["title"] == "Technician Workforce Availability"
+
+    # 3. Query maintenance bays
+    resp_bay = client.post("/api/chat/query", json={"prompt": "What is the status of the maintenance bays?", "base_id": "all"})
+    assert resp_bay.status_code == 200
+    data_bay = resp_bay.json()
+    assert "bays" in data_bay["text"].lower()
+
+    # 4. Query Data Trust verification needs
+    resp_trust = client.post("/api/chat/query", json={"prompt": "What records need verification in the trust queue?", "base_id": "all"})
+    assert resp_trust.status_code == 200
+    data_trust = resp_trust.json()
+    assert "verification" in data_trust["text"].lower()
+
+    # 5. Out of bounds query
+    resp_oob = client.post("/api/chat/query", json={"prompt": "What is the price of gold in Tokyo?", "base_id": "all"})
+    assert resp_oob.status_code == 200
+    data_oob = resp_oob.json()
+    assert "does not contain records" in data_oob["text"]
+

@@ -151,3 +151,42 @@ def test_optimizer_simulation(client):
     sim_res = resp_sim.json()
     assert sim_res["aircraft_days_recovered"] >= 2.5
     assert sim_res["projectedFleetReadinessPct"] >= 85
+
+def test_maintenance_bays_alias_and_optimizer_post(client):
+    # Test /api/maintenance-bays endpoint alias
+    resp_mb = client.get("/api/maintenance-bays?base_id=all")
+    assert resp_mb.status_code == 200
+    bays = resp_mb.json()
+    assert len(bays) >= 4
+
+    # Test POST /api/optimizer/compare
+    resp_post_comp = client.post("/api/optimizer/compare")
+    assert resp_post_comp.status_code == 200
+    reco = resp_post_comp.json()
+    assert reco["daysRecovered"] == 2.92
+    assert "tradeOff" in reco
+
+def test_ledger_decision_and_csv_export(client):
+    # 1. Post a commander override decision
+    payload = {
+        "actor": "Air Commander",
+        "action": "OVERRIDE_MAINTENANCE_SEQUENCE",
+        "previous_state": "Queued in normal FIFO",
+        "resulting_state": "Expedited to Flightline Ready",
+        "notes": "Operational surge requires early turn of tail T-04",
+        "baseId": "base-bravo",
+        "isOverride": True,
+        "overrideReason": "Urgent combat air patrol sortie deployment"
+    }
+    resp = client.post("/api/ledger/decision", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["isOverride"] is True
+    assert data["overrideReason"] == "Urgent combat air patrol sortie deployment"
+
+    # 2. Test CSV export of ledger
+    resp_csv = client.get("/api/ledger/export/csv?base_id=all")
+    assert resp_csv.status_code == 200
+    assert "text/csv" in resp_csv.headers.get("content-type", "")
+    assert "OVERRIDE_MAINTENANCE_SEQUENCE" in resp_csv.text
+

@@ -18,6 +18,7 @@ import {
 } from '../../types/aircraft';
 import { AircraftViewer } from '../AircraftViewer/AircraftViewer';
 import { mockAirDoctorService } from '../../services/mockAirDoctorService';
+import { api } from '../../services/apiClient';
 
 interface DigitalTwinViewProps {
   aircraftList: AircraftData[];
@@ -84,7 +85,7 @@ export const DigitalTwinView: React.FC<DigitalTwinViewProps> = ({
     );
   }, [currentAircraft, selectedCompId]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
 
@@ -99,10 +100,13 @@ export const DigitalTwinView: React.FC<DigitalTwinViewProps> = ({
     };
     setChatMessages((prev) => [...prev, newMsg]);
 
-    setTimeout(() => {
+    try {
+      const response = await api.queryAiAssistant(userText);
+      setChatMessages((prev) => [...prev, response]);
+    } catch {
       const response = mockAirDoctorService.queryAiAssistant(userText);
       setChatMessages((prev) => [...prev, response]);
-    }, 400);
+    }
   };
 
   return (

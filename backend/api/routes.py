@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Response
 from sqlalchemy.orm import Session
@@ -241,7 +241,7 @@ def verify_trust_record(record_id: str, reviewer: str = "Air Commander", db: Ses
     # Log to Decision Ledger
     ledger = DecisionLedgerORM(
         id=f"dec-{uuid.uuid4().hex[:6]}",
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat(),
         actor=reviewer,
         action="VERIFY_DATA_TRUST_RECORD",
         previous_state=f"{rec.record_id}: {old_status}",
@@ -267,7 +267,7 @@ def reject_trust_record(record_id: str, reviewer: str = "Air Commander", db: Ses
 
     ledger = DecisionLedgerORM(
         id=f"dec-{uuid.uuid4().hex[:6]}",
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat(),
         actor=reviewer,
         action="REJECT_ANOMALOUS_DATA_RECORD",
         previous_state=f"{rec.record_id}: {old_status}",
@@ -334,6 +334,7 @@ def get_technicians(base_id: Optional[str] = Query("all"), db: Session = Depends
         for t in techs
     ]
 
+@router.get("/maintenance-bays", response_model=List[MaintenanceBay], tags=["Logistics"])
 @router.get("/bays", response_model=List[MaintenanceBay], tags=["Logistics"])
 def get_maintenance_bays(base_id: Optional[str] = Query("all"), db: Session = Depends(get_db)):
     """Returns maintenance bay occupancy and turn times across bases."""
@@ -421,7 +422,7 @@ def create_work_order(wo_in: WorkOrderCreate, db: Session = Depends(get_db)):
     # Log to Decision Ledger
     ledger = DecisionLedgerORM(
         id=f"dec-{uuid.uuid4().hex[:6]}",
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat(),
         actor="Air Commander",
         action="CREATE_WORK_ORDER",
         previous_state=f"{wo_in.aircraft}: Unscheduled",
@@ -466,7 +467,7 @@ def update_work_order(work_order_id: str, updates: WorkOrderUpdate, db: Session 
     new_state = f"{wo.id}: {wo.scheduled_date} ({wo.status})"
     ledger = DecisionLedgerORM(
         id=f"dec-{uuid.uuid4().hex[:6]}",
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat(),
         actor="AI Maintenance Planner / Air Commander",
         action="UPDATE_WORK_ORDER_SCHEDULE",
         previous_state=old_state,
@@ -484,6 +485,7 @@ def update_work_order(work_order_id: str, updates: WorkOrderUpdate, db: Session 
 # 6. Resource Recovery Optimizer
 # -------------------------------------------------------------
 @router.get("/optimizer/compare", response_model=OptimizerRecommendation, tags=["Optimizer"])
+@router.post("/optimizer/compare", response_model=OptimizerRecommendation, tags=["Optimizer"])
 def get_optimizer_compare():
     """Returns baseline vs recommended resource scenario with recovered aircraft-days."""
     return get_default_optimizer_recommendation()
@@ -526,7 +528,7 @@ def record_decision(req: CreateDecisionRequest, db: Session = Depends(get_db)):
     """Appends an immutable audit event to the Decision Ledger."""
     entry = DecisionLedgerORM(
         id=f"dec-{uuid.uuid4().hex[:6]}",
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat(),
         actor=req.actor,
         action=req.action,
         previous_state=req.previous_state,

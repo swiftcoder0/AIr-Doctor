@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # -------------------------------------------------------------
 # Base & Fleet Schemas
@@ -14,8 +14,7 @@ class BaseInfo(BaseModel):
     dataFreshness: str
     syncStatus: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ComponentKeyParams(BaseModel):
@@ -102,8 +101,7 @@ class FleetTableItem(BaseModel):
     baseId: str
     issue: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # -------------------------------------------------------------
@@ -128,8 +126,7 @@ class SparePart(BaseModel):
     compatibleAircraft: Optional[str] = "Tejas / Rafale"
     condition: Optional[str] = "Serviceable"
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Technician(BaseModel):
@@ -142,8 +139,7 @@ class Technician(BaseModel):
     assignedAircraft: Optional[str] = None
     shift: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MaintenanceBay(BaseModel):
@@ -156,8 +152,7 @@ class MaintenanceBay(BaseModel):
     activeJob: Optional[str] = None
     estimatedFreeTime: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # -------------------------------------------------------------
@@ -178,8 +173,7 @@ class WorkOrder(BaseModel):
     assignedTech: Optional[str] = None
     requiredSpare: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WorkOrderCreate(BaseModel):
@@ -229,8 +223,7 @@ class DataTrustRecord(BaseModel):
     ground_truth_label: Optional[str] = None
     payload: Dict[str, Any]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ImportHistoryItem(BaseModel):
@@ -245,8 +238,7 @@ class ImportHistoryItem(BaseModel):
     flaggedCount: int
     status: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CsvRowError(BaseModel):
@@ -339,8 +331,7 @@ class DecisionLedgerEntry(BaseModel):
     isOverride: Optional[bool] = False
     overrideReason: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CreateDecisionRequest(BaseModel):

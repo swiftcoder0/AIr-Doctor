@@ -101,15 +101,20 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({
     }
   };
 
-  const handleApplyTransfer = () => {
-    mockAirDoctorService.recordDecision({
+  const handleApplyTransfer = async () => {
+    const entry = {
       actor: 'Air Commander (via AI Assistant)',
       action: 'APPROVE_CROSS_BASE_TRANSFER_FROM_ASSISTANT',
       previous_state: 'Base Bravo HP-9042: 0 units',
       resulting_state: 'Air Courier Dispatched from Base Alpha',
       notes: 'Commander confirmed 72h downtime reduction recommendation via AI Assistant.',
-      baseId: 'base-bravo',
-    });
+      baseId: 'base-bravo' as const,
+    };
+    try {
+      await api.recordDecision(entry);
+    } catch {
+      mockAirDoctorService.recordDecision(entry);
+    }
     setActionSuccess('Transfer authorized! Decision recorded in Decision Ledger.');
     setTimeout(() => setActionSuccess(''), 4000);
     if (onLogDecision) onLogDecision();

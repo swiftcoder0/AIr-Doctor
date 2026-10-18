@@ -14,8 +14,9 @@ import {
   FileCheck,
   X,
 } from 'lucide-react';
-import { WhatIfRequest, WhatIfResult } from '../../types/aircraft';
+import { WhatIfRequest, WhatIfResult, OptimizerRecommendation, BaseId } from '../../types/aircraft';
 import { mockAirDoctorService } from '../../services/mockAirDoctorService';
+import { api } from '../../services/apiClient';
 
 interface ResourceOptimizerViewProps {
   onLogDecision?: () => void;
@@ -26,7 +27,17 @@ export const ResourceOptimizerView: React.FC<ResourceOptimizerViewProps> = ({
   onLogDecision,
   onNavigate,
 }) => {
-  const defaultReco = mockAirDoctorService.getDefaultRecommendation();
+  const [defaultReco, setDefaultReco] = useState<OptimizerRecommendation>(() =>
+    mockAirDoctorService.getDefaultRecommendation()
+  );
+
+  React.useEffect(() => {
+    let active = true;
+    api.getOptimizerRecommendation().then((rec) => {
+      if (active && rec) setDefaultReco(rec);
+    });
+    return () => { active = false; };
+  }, []);
 
   // State for What-If sandbox
   const [crossBaseTransfer, setCrossBaseTransfer] = useState<boolean>(true);
@@ -51,19 +62,25 @@ export const ResourceOptimizerView: React.FC<ResourceOptimizerViewProps> = ({
     'Priority sortie requirements at Base Alpha require retaining local hydraulic buffer. Commercial expedite preferred.'
   );
 
-  const handleSimulate = (
+  const handleSimulate = async (
     cBase: boolean = crossBaseTransfer,
     spare: number = extraSpare,
     tech: number = extraTech,
     bay: number = extraBay
   ) => {
-    const res = mockAirDoctorService.runWhatIf({
+    const req: WhatIfRequest = {
       delta_spares: { 'HP-9042': spare },
       delta_technicians: { 'Hydraulics Specialist': tech },
       delta_bays: bay,
       cross_base_transfer: cBase,
-    });
-    setSimulationResult(res);
+    };
+    try {
+      const res = await api.simulateWhatIf(req);
+      setSimulationResult(res);
+    } catch {
+      const res = mockAirDoctorService.runWhatIf(req);
+      setSimulationResult(res);
+    }
   };
 
   const handleResetToBaseline = () => {
@@ -74,15 +91,22 @@ export const ResourceOptimizerView: React.FC<ResourceOptimizerViewProps> = ({
     handleSimulate(false, 0, 0, 0);
   };
 
-  const handleApplyRecommendation = () => {
-    mockAirDoctorService.recordDecision({
+  const handleApplyRecommendation = async () => {
+    const entry = {
       actor: 'Wing Cmdr. Aditya (Operations Lead)',
       action: 'ACCEPT_OPTIMIZER_RECOMMENDATION',
       previous_state: 'Baseline Readiness: Tejas ready in 96h (Bottleneck: HP-9042 lead time)',
       resulting_state: `Cross-Base Transfer Authorized: Projected ready in ${simulationResult.projectedReadyHours}h (+${simulationResult.aircraft_days_recovered} days recovered)`,
       notes: `Commander accepted optimal recommendation. Transport aircraft dispatched to ferry HP-9042 from Base Alpha to Base Bravo.`,
       scenario_id: 'cross_base_transfer_opt',
-    });
+      baseId: 'base-bravo' as BaseId,
+    };
+
+    try {
+      await api.recordDecision(entry);
+    } catch {
+      mockAirDoctorService.recordDecision(entry);
+    }
 
     setActionSuccess(
       `Accepted recommendation: Cross-base transfer authorized! Logged to Decision Ledger (+${simulationResult.aircraft_days_recovered} aircraft-days recovered).`
@@ -90,9 +114,9 @@ export const ResourceOptimizerView: React.FC<ResourceOptimizerViewProps> = ({
     if (onLogDecision) onLogDecision();
   };
 
-  const handleConfirmOverride = (e: React.FormEvent) => {
+  const handleConfirmOverride = async (e: React.FormEvent) => {
     e.preventDefault();
-    mockAirDoctorService.recordDecision({
+    const entry = {
       actor: 'Wing Cmdr. Aditya (Operations Lead)',
       action: 'OVERRIDE_OPTIMIZER_RECOMMENDATION',
       previous_state: 'Recommended: Cross-Base Transfer from Base Alpha',
@@ -101,7 +125,14 @@ export const ResourceOptimizerView: React.FC<ResourceOptimizerViewProps> = ({
       isOverride: true,
       overrideReason: overrideReason,
       scenario_id: 'override_manual',
-    });
+      baseId: 'base-bravo' as BaseId,
+    };
+
+    try {
+      await api.recordDecision(entry);
+    } catch {
+      mockAirDoctorService.recordDecision(entry);
+    }
 
     setShowOverrideModal(false);
     setActionSuccess('Commander override recorded in Decision Ledger with required operational justification.');

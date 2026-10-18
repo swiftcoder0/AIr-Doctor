@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { BaseId, DecisionLedgerEntry, ImportHistoryItem } from '../../types/aircraft';
 import { mockAirDoctorService } from '../../services/mockAirDoctorService';
+import { api } from '../../services/apiClient';
 
 interface DecisionLedgerViewProps {
   selectedBaseId: BaseId;
@@ -34,8 +35,23 @@ export const DecisionLedgerView: React.FC<DecisionLedgerViewProps> = ({
   const [resultingState, setResultingState] = useState<string>('Expedited via tactical transport');
   const [notes, setNotes] = useState<string>('Priority authorization granted to compress airframe downtime.');
 
-  const ledgerEntries = mockAirDoctorService.getLedger(selectedBaseId);
-  const importHistory = mockAirDoctorService.getImportHistory(selectedBaseId);
+  const [ledgerEntries, setLedgerEntries] = useState<DecisionLedgerEntry[]>(() =>
+    mockAirDoctorService.getLedger(selectedBaseId)
+  );
+  const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>(() =>
+    mockAirDoctorService.getImportHistory(selectedBaseId)
+  );
+
+  React.useEffect(() => {
+    let active = true;
+    api.getLedger(selectedBaseId).then((data) => {
+      if (active && data) setLedgerEntries(data);
+    });
+    api.getImportHistory(selectedBaseId).then((data) => {
+      if (active && data) setImportHistory(data);
+    });
+    return () => { active = false; };
+  }, [selectedBaseId]);
 
   // Download client-side CSV
   const handleDownloadCsv = () => {
@@ -64,16 +80,23 @@ export const DecisionLedgerView: React.FC<DecisionLedgerViewProps> = ({
     document.body.removeChild(link);
   };
 
-  const handleCreateDecision = (e: React.FormEvent) => {
+  const handleCreateDecision = async (e: React.FormEvent) => {
     e.preventDefault();
-    mockAirDoctorService.recordDecision({
+    const newEntry = {
       actor: 'Wing Cmdr. Aditya (Manual Log)',
       action: actionName,
       previous_state: prevState,
       resulting_state: resultingState,
       notes: notes,
       baseId: selectedBaseId === 'all' ? 'base-bravo' : selectedBaseId,
-    });
+    };
+    try {
+      const created = await api.recordDecision(newEntry);
+      setLedgerEntries((prev) => [created, ...prev]);
+    } catch {
+      mockAirDoctorService.recordDecision(newEntry);
+      setLedgerEntries(mockAirDoctorService.getLedger(selectedBaseId));
+    }
     setIsAdding(false);
   };
 

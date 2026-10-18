@@ -2,7 +2,7 @@ import csv
 import io
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Tuple
 from sqlalchemy.orm import Session
 from backend.models import ImportBatchORM, DataTrustRecordORM, DecisionLedgerORM
@@ -169,7 +169,7 @@ def commit_csv_import(
     creates DataTrust records, and logs the decision into the audit ledger.
     """
     batch_id = f"imp-{uuid.uuid4().hex[:6]}"
-    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     base_name = "Base Alpha (Ambala AFS)" if base_id == "base-alpha" else "Base Bravo (Sulur AFS)" if base_id == "base-bravo" else "Central HQ"
 
     flagged_count = 0
@@ -200,7 +200,7 @@ def commit_csv_import(
             category=category,
             record_id=f"REC-{category.upper()[:3]}-{idx+1:04d}",
             source_system=f"CSV Upload: {filename}",
-            timestamp=row.get("date", datetime.utcnow().strftime("%Y-%m-%d")),
+            timestamp=row.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
             quality_grade="D" if is_flagged else "A",
             requires_human_verification=is_flagged,
             verification_status="NEEDS_REVIEW" if is_flagged else "VERIFIED",
@@ -241,7 +241,7 @@ def commit_csv_import(
     # Append to Decision Ledger
     ledger_entry = DecisionLedgerORM(
         id=f"dec-{uuid.uuid4().hex[:6]}",
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat(),
         actor="Ground Telemetry Ingest Officer",
         action="COMMIT_CSV_IMPORT_BATCH",
         previous_state="OFFLINE_CSV_BATCH_SUBMITTED",
