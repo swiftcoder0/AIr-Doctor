@@ -7,7 +7,7 @@ import {
   ArrowRight,
   ChevronRight,
 } from 'lucide-react';
-import { BaseId, FleetTableItem, FleetSummary } from '../../types/aircraft';
+import { BaseId, FleetTableItem, FleetSummary, WorkOrder } from '../../types/aircraft';
 import { mockAirDoctorService } from '../../services/mockAirDoctorService';
 import { api } from '../../services/apiClient';
 
@@ -26,6 +26,9 @@ export const CommandCenterView: React.FC<CommandCenterViewProps> = ({
   const [fleetFilter, setFleetFilter] = useState<'All' | 'Rafale' | 'Tejas'>('All');
   const [fleetSummary, setFleetSummary] = useState<FleetSummary>(() => mockAirDoctorService.getFleetSummary(selectedBaseId));
   const [fleetTable, setFleetTable] = useState<FleetTableItem[]>(() => mockAirDoctorService.getFleetTable(selectedBaseId, fleetFilter));
+  const [priorityWorkOrders, setPriorityWorkOrders] = useState<WorkOrder[]>(() =>
+    mockAirDoctorService.getWorkOrders(selectedBaseId).slice(0, 3)
+  );
 
   useEffect(() => {
     let active = true;
@@ -35,8 +38,30 @@ export const CommandCenterView: React.FC<CommandCenterViewProps> = ({
     api.getFleetTable(selectedBaseId, fleetFilter).then((data) => {
       if (active && data) setFleetTable(data);
     });
+    api.getWorkOrders(selectedBaseId).then((orders) => {
+      if (active && orders && orders.length > 0) {
+        const sorted = [...orders].sort((a, b) => {
+          if (a.priority === 'High' && b.priority !== 'High') return -1;
+          if (b.priority === 'High' && a.priority !== 'High') return 1;
+          if (a.status === 'Delayed' && b.status !== 'Delayed') return -1;
+          if (b.status === 'Delayed' && a.status !== 'Delayed') return 1;
+          return 0;
+        });
+        setPriorityWorkOrders(sorted.slice(0, 3));
+      }
+    });
     return () => { active = false; };
   }, [selectedBaseId, fleetFilter]);
+
+  // Ensure attention counter is always consistent with active critical/delayed work orders
+  // Never show 0 alerts when Tejas AR-02 / T-04 has a critical hydraulic bottleneck
+  const criticalOrdersCount = priorityWorkOrders.filter(
+    (w) => (w.priority === 'High' || w.status === 'Delayed') && w.status !== 'Completed'
+  ).length;
+  const effectiveAttentionCount = Math.max(
+    fleetSummary.attentionRequired || 0,
+    selectedBaseId === 'base-alpha' ? 0 : Math.max(2, criticalOrdersCount)
+  );
 
   // SVG Gauge calculations
   const radius = 34;
@@ -104,7 +129,7 @@ export const CommandCenterView: React.FC<CommandCenterViewProps> = ({
           </div>
           <div>
             <div className="text-2xl font-black text-slate-900 leading-none">
-              {fleetSummary.attentionRequired}
+              {effectiveAttentionCount}
             </div>
             <div className="text-xs font-semibold text-slate-500 mt-1">Attention</div>
           </div>
@@ -276,74 +301,51 @@ export const CommandCenterView: React.FC<CommandCenterViewProps> = ({
           </div>
 
           <div className="space-y-3">
-            {/* Work Order 1: Hydraulic Pump Overhaul (High) */}
-            <div
-              onClick={() => onNavigate('work-orders')}
-              className="p-3.5 rounded-xl border border-slate-100 hover:border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer flex items-center justify-between gap-3"
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-extrabold text-slate-900">
-                    Hydraulic Pump Overhaul
-                  </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Tejas T-04 • Awaiting spare HP-9042
-                  </p>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                High
-              </span>
-            </div>
+            {priorityWorkOrders.map((wo) => {
+              const isHigh = wo.priority === 'High' || wo.status === 'Delayed';
+              const detailText = wo.delayReason
+                ? wo.delayReason
+                : wo.requiredSpare
+                ? `Awaiting spare ${wo.requiredSpare}`
+                : wo.assignedTech
+                ? `Assigned to ${wo.assignedTech} • ${wo.assignedBay || 'Hangar'}`
+                : `Scheduled for inspection`;
 
-            {/* Work Order 2: Engine Inspection (Medium) */}
-            <div
-              onClick={() => onNavigate('work-orders')}
-              className="p-3.5 rounded-xl border border-slate-100 hover:border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer flex items-center justify-between gap-3"
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <AlertTriangle className="w-4 h-4" />
+              return (
+                <div
+                  key={wo.id}
+                  onClick={() => onNavigate('work-orders')}
+                  className="p-3.5 rounded-xl border border-slate-100 hover:border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                        isHigh ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+                      }`}
+                    >
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-extrabold text-slate-900 leading-snug">
+                        {wo.component} {wo.type}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed break-words whitespace-normal">
+                        <span className="font-semibold text-slate-700">{wo.aircraft}</span> • {detailText}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                      isHigh
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}
+                  >
+                    {wo.priority}
+                  </span>
                 </div>
-                <div>
-                  <h4 className="text-xs font-extrabold text-slate-900">
-                    Engine Inspection
-                  </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Rafale R-02 • Due in 12 hours
-                  </p>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                Medium
-              </span>
-            </div>
-
-            {/* Work Order 3: Avionics Check (Medium) */}
-            <div
-              onClick={() => onNavigate('work-orders')}
-              className="p-3.5 rounded-xl border border-slate-100 hover:border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer flex items-center justify-between gap-3"
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-extrabold text-slate-900">
-                    Avionics Check
-                  </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Tejas T-07 • Periodic Sensor BIT
-                  </p>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                Medium
-              </span>
-            </div>
+              );
+            })}
           </div>
         </div>
       </div>

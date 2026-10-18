@@ -15,7 +15,7 @@ import {
   DataTrustRecord,
 } from '../../types/aircraft';
 import { mockAirDoctorService } from '../../services/mockAirDoctorService';
-import { api } from '../../services/apiClient';
+import { api, getActiveUserRole } from '../../services/apiClient';
 
 interface DataTrustViewProps {
   selectedBaseId: BaseId;
@@ -28,6 +28,7 @@ export const DataTrustView: React.FC<DataTrustViewProps> = ({
   onLogDecision,
 }) => {
   const activeBase: BaseId = selectedBaseId === 'all' ? 'base-bravo' : selectedBaseId;
+  const isViewer = getActiveUserRole() === 'Viewer';
   const [activeStep, setActiveStep] = useState<number>(1);
   const [selectedCategory, setSelectedCategory] = useState<DataCategory>('aircraft_health');
   const [actionSuccess, setActionSuccess] = useState<string>('');
@@ -133,6 +134,15 @@ export const DataTrustView: React.FC<DataTrustViewProps> = ({
         ))}
       </div>
 
+      {isViewer && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>
+            <strong>RBAC Notice:</strong> You are currently logged in with the <strong>Viewer</strong> role (Read-Only). Committing new CSV imports and reviewing queue records are restricted to Planner and Commander roles.
+          </span>
+        </div>
+      )}
+
       {actionSuccess && (
         <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-bold flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -173,7 +183,15 @@ export const DataTrustView: React.FC<DataTrustViewProps> = ({
               Drag &amp; drop your CSV file here <br />
               <span className="text-slate-400 font-normal">or</span>
             </div>
-            <button className="px-4 py-2 bg-[#142A20] hover:bg-[#1a382b] text-emerald-400 border border-emerald-500/40 rounded-xl text-xs font-bold transition-colors">
+            <button
+              disabled={isViewer}
+              title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+                isViewer
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : 'bg-[#142A20] hover:bg-[#1a382b] text-emerald-400 border border-emerald-500/40'
+              }`}
+            >
               Choose File
             </button>
           </div>
@@ -223,10 +241,16 @@ export const DataTrustView: React.FC<DataTrustViewProps> = ({
           <div className="pt-2 flex justify-end">
             <button
               onClick={handleCommitData}
-              className="px-4 py-1.5 bg-[#142A20] hover:bg-[#1a382b] text-emerald-400 border border-emerald-500/40 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+              disabled={isViewer}
+              title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                isViewer
+                  ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-60'
+                  : 'bg-[#142A20] hover:bg-[#1a382b] text-emerald-400 border border-emerald-500/40'
+              }`}
             >
               <Check className="w-3.5 h-3.5" />
-              <span>Validate &amp; Commit Data</span>
+              <span>{isViewer ? 'Commit Disabled (Viewer)' : 'Validate & Commit Data'}</span>
             </button>
           </div>
         </div>
@@ -309,13 +333,25 @@ export const DataTrustView: React.FC<DataTrustViewProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => handleVerify(item.id, 'REJECTED')}
-                    className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold"
+                    disabled={isViewer}
+                    title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                      isViewer
+                        ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                        : 'bg-white hover:bg-rose-50 text-rose-700 border border-rose-200'
+                    }`}
                   >
                     Reject
                   </button>
                   <button
                     onClick={() => handleVerify(item.id, 'VERIFIED')}
-                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs"
+                    disabled={isViewer}
+                    title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold shadow-xs transition-colors ${
+                      isViewer
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    }`}
                   >
                     Verify &amp; Accept
                   </button>

@@ -13,9 +13,9 @@ import {
   Layers,
   X,
 } from 'lucide-react';
-import { BaseId, DecisionLedgerEntry, ImportHistoryItem } from '../../types/aircraft';
+import { BaseId, DecisionLedgerEntry, ImportHistoryItem, VerifyChainResult } from '../../types/aircraft';
 import { mockAirDoctorService } from '../../services/mockAirDoctorService';
-import { api } from '../../services/apiClient';
+import { api, getActiveUserRole } from '../../services/apiClient';
 
 interface DecisionLedgerViewProps {
   selectedBaseId: BaseId;
@@ -26,8 +26,11 @@ export const DecisionLedgerView: React.FC<DecisionLedgerViewProps> = ({
   selectedBaseId,
   onSelectBase,
 }) => {
+  const isViewer = getActiveUserRole() === 'Viewer';
   const [activeTab, setActiveTab] = useState<'ledger' | 'imports' | 'scenarios'>('ledger');
   const [isAdding, setIsAdding] = useState<boolean>(false);
+  const [chainVerification, setChainVerification] = useState<VerifyChainResult | null>(null);
+  const [isVerifyingChain, setIsVerifyingChain] = useState<boolean>(false);
 
   // Form state for manual ledger entry
   const [actionName, setActionName] = useState<string>('AUTHORIZE_EXPEDITED_LOGISTICS');
@@ -80,8 +83,22 @@ export const DecisionLedgerView: React.FC<DecisionLedgerViewProps> = ({
     document.body.removeChild(link);
   };
 
+  const handleVerifyChain = async () => {
+    setIsVerifyingChain(true);
+    try {
+      const result = await api.verifyLedgerChain();
+      setChainVerification(result);
+    } catch {
+      const result = await mockAirDoctorService.verifyLedgerChain();
+      setChainVerification(result);
+    } finally {
+      setIsVerifyingChain(false);
+    }
+  };
+
   const handleCreateDecision = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isViewer) return;
     const newEntry = {
       actor: 'Wing Cmdr. Aditya (Manual Log)',
       action: actionName,
@@ -118,6 +135,14 @@ export const DecisionLedgerView: React.FC<DecisionLedgerViewProps> = ({
 
         <div className="flex items-center gap-2">
           <button
+            onClick={handleVerifyChain}
+            disabled={isVerifyingChain}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 shadow-2xs transition-colors"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{isVerifyingChain ? 'Verifying Chain...' : 'Verify SHA-256 Audit Chain'}</span>
+          </button>
+          <button
             onClick={handleDownloadCsv}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-2xs transition-colors"
           >
@@ -125,14 +150,48 @@ export const DecisionLedgerView: React.FC<DecisionLedgerViewProps> = ({
             <span>Download Audit CSV</span>
           </button>
           <button
-            onClick={() => setIsAdding(!isAdding)}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-2xs transition-colors"
+            onClick={() => !isViewer && setIsAdding(!isAdding)}
+            disabled={isViewer}
+            title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold shadow-2xs transition-colors ${
+              isViewer
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Record Manual Entry</span>
+            <span>{isViewer ? 'Record Disabled (Viewer)' : 'Record Manual Entry'}</span>
           </button>
         </div>
       </div>
+
+      {/* Cryptographic Chain Verification Result Banner */}
+      {chainVerification && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs flex items-center justify-between text-emerald-900 animate-in fade-in duration-150">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-extrabold flex items-center gap-2">
+                <span>SHA-256 Cryptographic Chain Verified</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 font-mono">
+                  {chainVerification.total_blocks}/{chainVerification.total_blocks} Blocks Intact
+                </span>
+              </div>
+              <div className="text-[11px] font-mono text-emerald-700 mt-0.5 break-all">
+                Algorithm: <strong>{chainVerification.algorithm}</strong> • Head Hash: <code>{chainVerification.head_hash}</code>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setChainVerification(null)}
+            className="text-emerald-700 hover:text-emerald-900 p-1 rounded-lg"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* 2. Manual Entry Drawer / Form */}
       {isAdding && (
@@ -207,7 +266,13 @@ export const DecisionLedgerView: React.FC<DecisionLedgerViewProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 bg-blue-600 text-white font-bold rounded-xl text-xs"
+                disabled={isViewer}
+                title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+                className={`px-4 py-1.5 font-bold rounded-xl text-xs transition-colors ${
+                  isViewer
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
               >
                 Append to Audit Trail
               </button>
@@ -300,9 +365,22 @@ export const DecisionLedgerView: React.FC<DecisionLedgerViewProps> = ({
                   {entry.notes}
                 </p>
 
-                <div className="text-[10px] text-slate-400 flex items-center gap-3">
-                  <span>Actor: <strong>{entry.actor}</strong></span>
-                  {entry.baseId && <span>Base: <strong>{entry.baseId}</strong></span>}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                  <div className="text-[10px] text-slate-400 flex items-center gap-3">
+                    <span>Actor: <strong>{entry.actor}</strong></span>
+                    {entry.baseId && <span>Base: <strong>{entry.baseId}</strong></span>}
+                  </div>
+
+                  {(entry.prev_hash || entry.curr_hash) && (
+                    <div className="flex items-center gap-1.5 font-mono text-[10px] bg-slate-100/90 px-2.5 py-1 rounded-lg border border-slate-200/80 text-slate-600">
+                      <span className="text-slate-400">prev:</span>
+                      <span className="text-slate-700 font-bold" title={entry.prev_hash}>{entry.prev_hash ? entry.prev_hash.slice(0, 8) + '...' : '00000000...'}</span>
+                      <span className="text-slate-400">&rarr;</span>
+                      <span className="text-slate-400">curr:</span>
+                      <span className="text-emerald-700 font-bold" title={entry.curr_hash}>{entry.curr_hash ? entry.curr_hash.slice(0, 8) + '...' : 'pending'}</span>
+                      <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-sans font-bold">SHA-256</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -14,11 +14,11 @@ import {
   AlertTriangle,
   Plus,
   X,
+  ShieldCheck,
 } from 'lucide-react';
-import { BaseId, DecisionLedgerEntry } from '../../types/aircraft';
+import { BaseId, DecisionLedgerEntry, VerifyChainResult } from '../../types/aircraft';
 import { mockAirDoctorService } from '../../services/mockAirDoctorService';
-
-import { api } from '../../services/apiClient';
+import { api, getActiveUserRole } from '../../services/apiClient';
 
 interface ReportsAnalyticsViewProps {
   selectedBaseId: BaseId;
@@ -30,12 +30,15 @@ export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({
   selectedBaseId,
   onLogDecision,
 }) => {
+  const isViewer = getActiveUserRole() === 'Viewer';
   const [dateRange, setDateRange] = useState<string>('01 Oct 2024 – 31 Oct 2024');
   const [actionSuccess, setActionSuccess] = useState<string>('');
   const [insightsInput, setInsightsInput] = useState<string>('');
 
   // Decision Ledger state
   const [isAddingLedger, setIsAddingLedger] = useState<boolean>(false);
+  const [chainVerification, setChainVerification] = useState<VerifyChainResult | null>(null);
+  const [isVerifyingChain, setIsVerifyingChain] = useState<boolean>(false);
   const [actionName, setActionName] = useState<string>('AUTHORIZE_EXPEDITED_LOGISTICS');
   const [prevState, setPrevState] = useState<string>('Awaiting commercial shipment');
   const [resultingState, setResultingState] = useState<string>('Expedited via tactical transport');
@@ -83,8 +86,22 @@ export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({
     setTimeout(() => setActionSuccess(''), 4000);
   };
 
+  const handleVerifyChain = async () => {
+    setIsVerifyingChain(true);
+    try {
+      const result = await api.verifyLedgerChain();
+      setChainVerification(result);
+    } catch {
+      const result = await mockAirDoctorService.verifyLedgerChain();
+      setChainVerification(result);
+    } finally {
+      setIsVerifyingChain(false);
+    }
+  };
+
   const handleCreateDecision = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isViewer) return;
     const newEntry = {
       actor: 'Air Commander',
       action: actionName,
@@ -469,6 +486,14 @@ export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={handleVerifyChain}
+                disabled={isVerifyingChain}
+                className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold text-emerald-800 flex items-center gap-1 shadow-2xs transition-colors"
+              >
+                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                <span>{isVerifyingChain ? 'Verifying...' : 'Verify Chain'}</span>
+              </button>
+              <button
                 onClick={handleDownloadCsv}
                 className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-1 shadow-2xs"
               >
@@ -476,14 +501,39 @@ export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({
                 <span>Export CSV</span>
               </button>
               <button
-                onClick={() => setIsAddingLedger(!isAddingLedger)}
-                className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1"
+                onClick={() => !isViewer && setIsAddingLedger(!isAddingLedger)}
+                disabled={isViewer}
+                title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors ${
+                  isViewer
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                    : 'bg-slate-900 hover:bg-slate-800 text-white'
+                }`}
               >
                 <Plus className="w-3 h-3" />
-                <span>Add Entry</span>
+                <span>{isViewer ? 'Disabled (Viewer)' : 'Add Entry'}</span>
               </button>
             </div>
           </div>
+
+          {/* Verification Result Banner */}
+          {chainVerification && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs flex items-center justify-between text-emerald-900 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <div>
+                  <span className="font-extrabold text-emerald-950">Chain Verified:</span>{' '}
+                  <span>{chainVerification.total_blocks}/{chainVerification.total_blocks} Blocks Intact ({chainVerification.algorithm})</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setChainVerification(null)}
+                className="text-emerald-700 hover:text-emerald-900 text-xs font-bold"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {/* New Entry Form */}
           {isAddingLedger && (
@@ -516,7 +566,13 @@ export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-1 bg-slate-900 text-white font-bold rounded-lg"
+                  disabled={isViewer}
+                  title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+                  className={`px-3 py-1 font-bold rounded-lg transition-colors ${
+                    isViewer
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                      : 'bg-slate-900 text-white'
+                  }`}
                 >
                   Record Entry
                 </button>
@@ -549,6 +605,17 @@ export const ReportsAnalyticsView: React.FC<ReportsAnalyticsViewProps> = ({
                 <p className="text-slate-600 text-[11px] leading-snug">
                   {entry.notes}
                 </p>
+
+                {(entry.prev_hash || entry.curr_hash) && (
+                  <div className="flex items-center gap-1 font-mono text-[9px] text-slate-500 pt-0.5">
+                    <span className="text-slate-400">prev:</span>
+                    <span className="text-slate-700 font-semibold" title={entry.prev_hash}>{entry.prev_hash ? entry.prev_hash.slice(0, 8) + '...' : '00000000...'}</span>
+                    <span className="text-slate-400">&rarr;</span>
+                    <span className="text-slate-400">curr:</span>
+                    <span className="text-emerald-700 font-semibold" title={entry.curr_hash}>{entry.curr_hash ? entry.curr_hash.slice(0, 8) + '...' : 'pending'}</span>
+                    <span className="text-[8px] bg-emerald-100 text-emerald-800 px-1 rounded font-sans font-bold">SHA-256</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Response, Header
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.config import DATA_CLASSIFICATION, MAX_UPLOAD_SIZE_BYTES, ALLOWED_CSV_EXTENSIONS
@@ -39,6 +39,10 @@ from backend.schemas import (
     CsvCommitResponse,
     ChatQueryRequest,
     ChatQueryResponse,
+    SecurityStatus,
+    VerifyTotpRequest,
+    VerifyTotpResponse,
+    VerifyChainResponse,
 )
 from backend.services.fleet_service import (
     get_all_bases,
@@ -50,8 +54,38 @@ from backend.services.fleet_service import (
 from backend.services.csv_service import parse_and_validate_csv, commit_csv_import
 from backend.services.optimizer_service import calculate_what_if_simulation, get_default_optimizer_recommendation
 from backend.services.chat_service import answer_ai_assistant_query
+from backend.services.security_service import (
+    get_security_status,
+    verify_totp_code,
+    verify_rbac_write_permission,
+)
+from backend.services.ledger_service import enrich_ledger_with_hashes, verify_ledger_chain
 
 router = APIRouter(prefix="/api")
+
+# -------------------------------------------------------------
+# 0. Authentication, Security & MFA
+# -------------------------------------------------------------
+@router.get("/auth/status", response_model=SecurityStatus, tags=["Security"])
+def get_auth_status():
+    """Returns active security configuration (Argon2id, RFC 6238 TOTP, RBAC roles)."""
+    return get_security_status()
+
+@router.post("/auth/verify-totp", response_model=VerifyTotpResponse, tags=["Security"])
+def verify_totp(req: VerifyTotpRequest):
+    """Validates a 6-digit TOTP code to unlock Commander step-up authorization."""
+    is_valid = verify_totp_code(req.code)
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid TOTP MFA token. Please verify current time window or click 'Auto-Fill Valid Demo TOTP'.",
+        )
+    return VerifyTotpResponse(
+        verified=True,
+        role=req.role or "Commander",
+        message="Commander authorization verified via TOTP Multi-Factor Authentication.",
+    )
+
 
 # -------------------------------------------------------------
 # 1. Health & Liveness
@@ -227,8 +261,14 @@ def list_trust_records(
     return out
 
 @router.post("/trust/{record_id}/verify", tags=["Data Trust"])
-def verify_trust_record(record_id: str, reviewer: str = "Air Commander", db: Session = Depends(get_db)):
+def verify_trust_record(
+    record_id: str,
+    reviewer: str = "Air Commander",
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+    db: Session = Depends(get_db),
+):
     """Marks a Data Trust record as VERIFIED and records an entry in the Decision Ledger."""
+    verify_rbac_write_permission(x_airdoctor_role)
     rec = db.query(DataTrustRecordORM).filter(DataTrustRecordORM.id == record_id).first()
     if not rec:
         raise HTTPException(status_code=404, detail=f"Data Trust Record '{record_id}' not found.")
@@ -255,8 +295,14 @@ def verify_trust_record(record_id: str, reviewer: str = "Air Commander", db: Ses
     return {"status": "ok", "record_id": record_id, "verification_status": "VERIFIED"}
 
 @router.post("/trust/{record_id}/reject", tags=["Data Trust"])
-def reject_trust_record(record_id: str, reviewer: str = "Air Commander", db: Session = Depends(get_db)):
+def reject_trust_record(
+    record_id: str,
+    reviewer: str = "Air Commander",
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+    db: Session = Depends(get_db),
+):
     """Marks a Data Trust record as REJECTED and records an entry in the Decision Ledger."""
+    verify_rbac_write_permission(x_airdoctor_role)
     rec = db.query(DataTrustRecordORM).filter(DataTrustRecordORM.id == record_id).first()
     if not rec:
         raise HTTPException(status_code=404, detail=f"Data Trust Record '{record_id}' not found.")
@@ -397,8 +443,13 @@ def list_work_orders(
     return [_to_work_order_schema(w) for w in query.all()]
 
 @router.post("/work-orders", response_model=WorkOrder, tags=["Work Orders"])
-def create_work_order(wo_in: WorkOrderCreate, db: Session = Depends(get_db)):
+def create_work_order(
+    wo_in: WorkOrderCreate,
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+    db: Session = Depends(get_db),
+):
     """Creates a new maintenance work order and records the decision in the audit ledger."""
+    verify_rbac_write_permission(x_airdoctor_role)
     total_existing = db.query(WorkOrderORM).count()
     new_id = f"WO-{1043 + total_existing}"
     
@@ -437,8 +488,14 @@ def create_work_order(wo_in: WorkOrderCreate, db: Session = Depends(get_db)):
     return _to_work_order_schema(wo)
 
 @router.patch("/work-orders/{work_order_id}", response_model=WorkOrder, tags=["Work Orders"])
-def update_work_order(work_order_id: str, updates: WorkOrderUpdate, db: Session = Depends(get_db)):
+def update_work_order(
+    work_order_id: str,
+    updates: WorkOrderUpdate,
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+    db: Session = Depends(get_db),
+):
     """Updates an existing work order's schedule or status, recording the action in the audit ledger."""
+    verify_rbac_write_permission(x_airdoctor_role)
     wo = db.query(WorkOrderORM).filter(WorkOrderORM.id == work_order_id).first()
     if not wo:
         raise HTTPException(status_code=404, detail=f"Work Order '{work_order_id}' not found.")
@@ -499,33 +556,28 @@ def simulate_optimizer_scenario(req: WhatIfRequest):
 # -------------------------------------------------------------
 # 7. Decision Ledger & Audit
 # -------------------------------------------------------------
+@router.get("/ledger/verify-chain", response_model=VerifyChainResponse, tags=["Ledger"])
+def verify_chain(db: Session = Depends(get_db)):
+    """Cryptographically validates the unbroken SHA-256 hash chain of the Decision Ledger."""
+    return verify_ledger_chain(db)
+
 @router.get("/ledger", response_model=List[DecisionLedgerEntry], tags=["Ledger"])
 def get_ledger(base_id: Optional[str] = Query("all"), db: Session = Depends(get_db)):
-    """Returns immutable audit trail of maintenance decisions, overrides, and CSV imports."""
+    """Returns immutable audit trail of maintenance decisions, enriched with cryptographic SHA-256 hash chains."""
     query = db.query(DecisionLedgerORM)
     if base_id != "all":
         query = query.filter((DecisionLedgerORM.base_id == base_id) | (DecisionLedgerORM.base_id == "all"))
-    entries = query.order_by(DecisionLedgerORM.timestamp.desc()).all()
-    return [
-        DecisionLedgerEntry(
-            id=e.id,
-            timestamp=e.timestamp,
-            actor=e.actor,
-            action=e.action,
-            previous_state=e.previous_state,
-            resulting_state=e.resulting_state,
-            notes=e.notes,
-            scenario_id=e.scenario_id,
-            baseId=e.base_id,
-            isOverride=e.is_override,
-            overrideReason=e.override_reason,
-        )
-        for e in entries
-    ]
+    entries = query.all()
+    return enrich_ledger_with_hashes(entries)
 
 @router.post("/ledger/decision", response_model=DecisionLedgerEntry, tags=["Ledger"])
-def record_decision(req: CreateDecisionRequest, db: Session = Depends(get_db)):
-    """Appends an immutable audit event to the Decision Ledger."""
+def record_decision(
+    req: CreateDecisionRequest,
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+    db: Session = Depends(get_db),
+):
+    """Appends an immutable audit event to the Decision Ledger with cryptographic verification."""
+    verify_rbac_write_permission(x_airdoctor_role)
     entry = DecisionLedgerORM(
         id=f"dec-{uuid.uuid4().hex[:6]}",
         timestamp=datetime.now(timezone.utc).isoformat(),
@@ -542,6 +594,14 @@ def record_decision(req: CreateDecisionRequest, db: Session = Depends(get_db)):
     db.add(entry)
     db.commit()
     db.refresh(entry)
+    
+    # Return enriched with current hash
+    all_entries = db.query(DecisionLedgerORM).all()
+    enriched = enrich_ledger_with_hashes(all_entries)
+    for e in enriched:
+        if e.id == entry.id:
+            return e
+
     return DecisionLedgerEntry(
         id=entry.id,
         timestamp=entry.timestamp,

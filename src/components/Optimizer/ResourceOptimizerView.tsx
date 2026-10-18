@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { WhatIfRequest, WhatIfResult, OptimizerRecommendation, BaseId } from '../../types/aircraft';
 import { mockAirDoctorService } from '../../services/mockAirDoctorService';
-import { api } from '../../services/apiClient';
+import { api, getActiveUserRole } from '../../services/apiClient';
 
 interface ResourceOptimizerViewProps {
   onLogDecision?: () => void;
@@ -27,6 +27,7 @@ export const ResourceOptimizerView: React.FC<ResourceOptimizerViewProps> = ({
   onLogDecision,
   onNavigate,
 }) => {
+  const isViewer = getActiveUserRole() === 'Viewer';
   const [defaultReco, setDefaultReco] = useState<OptimizerRecommendation>(() =>
     mockAirDoctorService.getDefaultRecommendation()
   );
@@ -179,6 +180,15 @@ export const ResourceOptimizerView: React.FC<ResourceOptimizerViewProps> = ({
         </div>
       </div>
 
+      {isViewer && (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>
+            <strong>RBAC Notice:</strong> You are currently logged in with the <strong>Viewer</strong> role (Read-Only). Authorizing optimizer transfers or logging commander overrides to the Decision Ledger is restricted to Commander and Planner roles.
+          </span>
+        </div>
+      )}
+
       {actionSuccess && (
         <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-bold flex items-center justify-between animate-in fade-in duration-150">
           <div className="flex items-center gap-2">
@@ -278,16 +288,28 @@ export const ResourceOptimizerView: React.FC<ResourceOptimizerViewProps> = ({
         <div className="flex items-center justify-end gap-3 pt-1">
           <button
             onClick={() => setShowOverrideModal(true)}
-            className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-colors"
+            disabled={isViewer}
+            title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${
+              isViewer
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-300'
+            }`}
           >
             Override Recommendation...
           </button>
           <button
             onClick={handleApplyRecommendation}
-            className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-2"
+            disabled={isViewer}
+            title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+            className={`px-5 py-2 rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-2 ${
+              isViewer
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>Accept Recommendation &amp; Authorize</span>
+            <span>{isViewer ? 'Authorization Disabled (Viewer)' : 'Accept Recommendation & Authorize'}</span>
           </button>
         </div>
       </div>
@@ -487,7 +509,13 @@ export const ResourceOptimizerView: React.FC<ResourceOptimizerViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow-xs transition-colors"
+                  disabled={isViewer}
+                  title={isViewer ? 'RBAC Policy: Viewer role is strictly read-only' : undefined}
+                  className={`px-4 py-2 rounded-xl font-bold shadow-xs transition-colors ${
+                    isViewer
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
                 >
                   Commit Override to Ledger
                 </button>

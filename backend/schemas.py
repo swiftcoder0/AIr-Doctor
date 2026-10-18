@@ -31,6 +31,22 @@ class ComponentProjection(BaseModel):
     insight: str
 
 
+class SensorAttribution(BaseModel):
+    name: str
+    contribution_pct: float
+
+
+class ComponentRulPrediction(BaseModel):
+    model_source: str
+    model_file_present: bool
+    rul_p10: float
+    rul_p50: float
+    rul_p90: float
+    risk_range_pct: float
+    trust_penalty_applied: bool
+    shap_drivers: List[SensorAttribution]
+
+
 class AircraftComponent(BaseModel):
     id: str
     name: str
@@ -46,6 +62,7 @@ class AircraftComponent(BaseModel):
     category: Optional[str] = "propulsion"
     keyParameters: Optional[ComponentKeyParams] = None
     futureProjections: Optional[Dict[str, ComponentProjection]] = None
+    rulPrediction: Optional[ComponentRulPrediction] = None
 
 
 class AircraftModelConfig(BaseModel):
@@ -330,8 +347,18 @@ class DecisionLedgerEntry(BaseModel):
     baseId: Optional[str] = None
     isOverride: Optional[bool] = False
     overrideReason: Optional[str] = None
+    prev_hash: Optional[str] = None
+    curr_hash: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class VerifyChainResponse(BaseModel):
+    verified: bool
+    total_blocks: int
+    head_hash: str
+    algorithm: str = "SHA-256"
+    message: str
 
 
 class CreateDecisionRequest(BaseModel):
@@ -344,6 +371,29 @@ class CreateDecisionRequest(BaseModel):
     baseId: Optional[str] = "all"
     isOverride: Optional[bool] = False
     overrideReason: Optional[str] = None
+
+
+# -------------------------------------------------------------
+# Security & RBAC Schemas
+# -------------------------------------------------------------
+class SecurityStatus(BaseModel):
+    argon2id_enabled: bool = True
+    totp_mfa_enabled: bool = True
+    roles: List[str] = ["Commander", "Planner", "Viewer"]
+    demo_totp_code: str
+    active_policy: str = "Strict Air Force RBAC + Step-Up RFC 6238 TOTP MFA"
+    crypto_algorithms: Optional[Dict[str, str]] = None
+
+
+class VerifyTotpRequest(BaseModel):
+    code: str
+    role: Optional[str] = "Commander"
+
+
+class VerifyTotpResponse(BaseModel):
+    verified: bool
+    role: str = "Commander"
+    message: str
 
 
 # -------------------------------------------------------------

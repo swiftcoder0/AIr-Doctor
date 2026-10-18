@@ -626,7 +626,7 @@ export const initialWorkOrders: WorkOrder[] = [
     aircraft: 'Rafale R-01',
     component: 'Engine',
     type: 'Inspection',
-    status: 'In Progress',
+    status: 'Scheduled',
     scheduledDate: '11 Oct 2024',
     estHours: 12,
     priority: 'Medium',

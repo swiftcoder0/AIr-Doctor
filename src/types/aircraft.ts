@@ -46,6 +46,7 @@ export interface AircraftComponentData {
     25: { health: number; status: ComponentStatusType; risk: RiskLevel; insight: string };
     50: { health: number; status: ComponentStatusType; risk: RiskLevel; insight: string };
   };
+  rulPrediction?: ComponentRulPrediction;
 }
 
 export interface AircraftData {
@@ -296,4 +297,54 @@ export interface DecisionLedgerEntry {
   baseId?: BaseId;
   isOverride?: boolean;
   overrideReason?: string;
+  prev_hash?: string;
+  curr_hash?: string;
 }
+
+export interface VerifyChainResult {
+  verified: boolean;
+  total_blocks: number;
+  head_hash: string;
+  algorithm: string;
+  message: string;
+}
+
+// -------------------------------------------------------------
+// Cybersecurity & RBAC Types
+// -------------------------------------------------------------
+export type UserRole = 'Commander' | 'Planner' | 'Viewer';
+
+export interface SecurityStatus {
+  argon2id_enabled: boolean;
+  totp_mfa_enabled: boolean;
+  roles: UserRole[];
+  demo_totp_code: string;
+  active_policy: string;
+  crypto_algorithms?: Record<string, string>;
+}
+
+export interface VerifyTotpResult {
+  verified: boolean;
+  role: string;
+  message: string;
+}
+
+// -------------------------------------------------------------
+// Drop-In Machine Learning & RUL Prediction Types
+// -------------------------------------------------------------
+export interface SensorAttribution {
+  name: string;
+  contribution_pct: number;
+}
+
+export interface ComponentRulPrediction {
+  model_source: 'joblib' | 'deterministic_fallback_slot';
+  model_file_present: boolean;
+  rul_p10: number;
+  rul_p50: number;
+  rul_p90: number;
+  risk_range_pct: number;
+  trust_penalty_applied: boolean;
+  shap_drivers: SensorAttribution[];
+}
+

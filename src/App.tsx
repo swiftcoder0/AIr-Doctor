@@ -9,10 +9,10 @@ import { ResourceOptimizerView } from './components/Optimizer/ResourceOptimizerV
 import { WorkOrdersView } from './components/WorkOrders/WorkOrdersView';
 import { ReportsAnalyticsView } from './components/Reports/ReportsAnalyticsView';
 import { AiAssistantView } from './components/AiAssistant/AiAssistantView';
-import { BaseId, AircraftData } from './types/aircraft';
+import { BaseId, AircraftData, UserRole } from './types/aircraft';
 import { mockAirDoctorService } from './services/mockAirDoctorService';
-
-import { api } from './services/apiClient';
+import { api, setActiveUserRole } from './services/apiClient';
+import { SecurityModal } from './components/Security/SecurityModal';
 
 export function App() {
   const [activeNav, setActiveNav] = useState<string>('command-center');
@@ -20,6 +20,8 @@ export function App() {
   const [selectedAircraftId, setSelectedAircraftId] = useState<string>('rafale');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [ledgerRevision, setLedgerRevision] = useState<number>(0);
+  const [currentRole, setCurrentRole] = useState<UserRole>('Commander');
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
 
   const [currentAircraftList, setCurrentAircraftList] = useState<AircraftData[]>(() =>
     mockAirDoctorService.get3DAircraft(selectedBaseId)
@@ -56,6 +58,11 @@ export function App() {
     setLedgerRevision((prev) => prev + 1);
   };
 
+  const handleRoleChange = (role: UserRole) => {
+    setCurrentRole(role);
+    setActiveUserRole(role);
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans select-none text-slate-800">
       {/* 1. Header with Base Selector, Search & Operations Banner */}
@@ -65,6 +72,9 @@ export function App() {
         selectedBaseId={selectedBaseId}
         onSelectBase={handleSelectBase}
         onNavigateToAssistant={() => setActiveNav('ai-assistant')}
+        currentRole={currentRole}
+        onRoleChange={handleRoleChange}
+        onOpenSecurityModal={() => setIsSecurityModalOpen(true)}
       />
 
       {/* 2. Main Layout Container: Sidebar + Active Section */}
@@ -154,6 +164,14 @@ export function App() {
           )}
         </main>
       </div>
+
+      {/* Cybersecurity & TOTP MFA Modal (Task 2) */}
+      <SecurityModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+        currentRole={currentRole}
+        onRoleSelect={handleRoleChange}
+      />
     </div>
   );
 }

@@ -474,7 +474,7 @@ def seed_database_if_empty(db: Session):
             aircraft="Rafale R-01",
             component="Engine",
             type="Inspection",
-            status="In Progress",
+            status="Scheduled",
             scheduled_date="11 Oct 2024",
             est_hours=12,
             priority="Medium",

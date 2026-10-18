@@ -1,7 +1,7 @@
 import json
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from backend.models import AircraftORM, BaseInfoORM, AircraftComponentORM
+from backend.models import AircraftORM, BaseInfoORM, AircraftComponentORM, DataTrustRecordORM
 from backend.schemas import (
     BaseInfo,
     FleetSummary,
@@ -11,7 +11,9 @@ from backend.schemas import (
     ComponentKeyParams,
     ComponentProjection,
     AircraftModelConfig,
+    ComponentRulPrediction,
 )
+from backend.services.model_loader import predict_component_rul
 
 def get_all_bases(db: Session) -> List[BaseInfo]:
     bases = db.query(BaseInfoORM).all()
@@ -77,7 +79,7 @@ def get_fleet_table(db: Session, base_id: str = "all", type_filter: str = "All")
         for a in items
     ]
 
-def _orm_to_component(c: AircraftComponentORM, future_hours: int = 0) -> AircraftComponent:
+def _orm_to_component(c: AircraftComponentORM, future_hours: int = 0, has_unverified_trust: bool = False) -> AircraftComponent:
     health = c.health
     status = c.status
     risk = c.maintenance_risk
@@ -118,6 +120,15 @@ def _orm_to_component(c: AircraftComponentORM, future_hours: int = 0) -> Aircraf
         except Exception:
             pass
 
+    # Drop-In Model Slot inference (or deterministic fallback)
+    rul_pred_raw = predict_component_rul(
+        component_name=c.name,
+        health_score=float(health),
+        future_hours=future_hours,
+        has_unverified_trust_anomalies=has_unverified_trust,
+    )
+    rul_pred = ComponentRulPrediction(**rul_pred_raw)
+
     return AircraftComponent(
         id=c.id,
         name=c.name,
@@ -133,6 +144,7 @@ def _orm_to_component(c: AircraftComponentORM, future_hours: int = 0) -> Aircraf
         category=c.category,
         keyParameters=key_params,
         futureProjections=projections if projections else None,
+        rulPrediction=rul_pred,
     )
 
 def get_3d_aircraft_list(db: Session, base_id: str = "all") -> List[AircraftData]:
@@ -191,7 +203,15 @@ def get_aircraft_health_detail(db: Session, aircraft_id: str, future_hours: int 
     if not a:
         return None
 
-    comps = [_orm_to_component(c, future_hours) for c in a.components]
+    # Check for unverified Grade C / D records affecting this base/aircraft
+    unverified_trust_count = db.query(DataTrustRecordORM).filter(
+        DataTrustRecordORM.quality_grade.in_(["C", "D"]),
+        DataTrustRecordORM.verification_status != "VERIFIED",
+        (DataTrustRecordORM.base_id == a.base_id) | (DataTrustRecordORM.base_id == "all")
+    ).count()
+    has_unverified_trust = (unverified_trust_count > 0)
+
+    comps = [_orm_to_component(c, future_hours, has_unverified_trust) for c in a.components]
     avg_health = round(sum(c.health for c in comps) / max(1, len(comps))) if comps else a.overall_health
     has_maint_req = any(c.status == "Maintenance Required" for c in comps)
     has_monitor = any(c.status == "Monitor" for c in comps)

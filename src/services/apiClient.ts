@@ -17,17 +17,32 @@ import {
   ChatMessage,
   DataCategory,
   FutureHours,
+  UserRole,
+  SecurityStatus,
+  VerifyTotpResult,
+  VerifyChainResult,
 } from '../types/aircraft';
 import { mockAirDoctorService } from './mockAirDoctorService';
 
 const rawBase = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 const API_BASE_URL = rawBase.endsWith('/api') ? rawBase : `${rawBase.replace(/\/+$/, '')}/api`;
 
+let activeUserRole: UserRole = 'Commander';
+
+export function setActiveUserRole(role: UserRole) {
+  activeUserRole = role;
+}
+
+export function getActiveUserRole(): UserRole {
+  return activeUserRole;
+}
+
 async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
+      'X-AirDoctor-Role': activeUserRole,
       ...options?.headers,
     },
     ...options,
@@ -288,6 +303,39 @@ export const api = {
       return res;
     } catch {
       return mockAirDoctorService.queryAiAssistant(prompt);
+    }
+  },
+
+  // -----------------------------------------------------------
+  // Cryptographic Audit & Verification
+  // -----------------------------------------------------------
+  async verifyLedgerChain(): Promise<VerifyChainResult> {
+    try {
+      return await fetchJson<VerifyChainResult>('/ledger/verify-chain');
+    } catch {
+      return mockAirDoctorService.verifyLedgerChain();
+    }
+  },
+
+  // -----------------------------------------------------------
+  // Cybersecurity, RBAC & TOTP MFA
+  // -----------------------------------------------------------
+  async getAuthStatus(): Promise<SecurityStatus> {
+    try {
+      return await fetchJson<SecurityStatus>('/auth/status');
+    } catch {
+      return mockAirDoctorService.getAuthStatus();
+    }
+  },
+
+  async verifyTotp(code: string, role: string = 'Commander'): Promise<VerifyTotpResult> {
+    try {
+      return await fetchJson<VerifyTotpResult>('/auth/verify-totp', {
+        method: 'POST',
+        body: JSON.stringify({ code, role }),
+      });
+    } catch {
+      return mockAirDoctorService.verifyTotp(code, role);
     }
   },
 };
