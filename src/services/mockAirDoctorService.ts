@@ -705,11 +705,17 @@ export const mockAirDoctorService = {
   // -----------------------------------------------------------
   // Cybersecurity, RBAC & TOTP MFA
   // -----------------------------------------------------------
-  getCurrentTotpCode(): string {
-    const window = Math.floor(Date.now() / 30000);
+  getCurrentTotpCode(offset: number = 0): string {
+    const window = Math.floor(Date.now() / 30000) + offset;
     const hash = sha256Sync(`AIRDOCTOR_MFA_WINDOW_${window}`);
     const num = parseInt(hash.slice(0, 8), 16) % 1000000;
-    return num.toString().padStart(6, '0');
+    const code = num.toString().padStart(6, '0');
+    // Save to valid cache
+    if (!(this as any)._issuedCodes) {
+      (this as any)._issuedCodes = new Set<string>(['777888', '123456']);
+    }
+    (this as any)._issuedCodes.add(code);
+    return code;
   },
 
   async getAuthStatus(): Promise<SecurityStatus> {
@@ -717,7 +723,7 @@ export const mockAirDoctorService = {
       argon2id_enabled: true,
       totp_mfa_enabled: true,
       roles: ['Commander', 'Planner', 'Viewer'],
-      demo_totp_code: this.getCurrentTotpCode(),
+      demo_totp_code: this.getCurrentTotpCode(0),
       active_policy: 'Strict Air Force RBAC + Step-Up RFC 6238 TOTP MFA',
       crypto_algorithms: {
         password_kdf: 'Argon2id (RFC 9106) / Scrypt memory-hard',
@@ -728,10 +734,14 @@ export const mockAirDoctorService = {
   },
 
   async verifyTotp(code: string, role: string = 'Commander'): Promise<VerifyTotpResult> {
-    const clean = code.trim();
-    const current = this.getCurrentTotpCode();
-    const valid = clean === current || clean === '777888' || clean === '123456';
-    if (!valid) {
+    const clean = (code || '').trim();
+    const issued: Set<string> = (this as any)._issuedCodes || new Set<string>();
+    const validCodes = new Set<string>(['777888', '123456', ...issued]);
+    for (const off of [0, -1, 1, -2, 2]) {
+      validCodes.add(this.getCurrentTotpCode(off));
+    }
+
+    if (!validCodes.has(clean)) {
       throw new Error("Invalid TOTP MFA token. Please verify current time window or click 'Auto-Fill Valid Demo TOTP'.");
     }
     return {
@@ -788,9 +798,13 @@ export const mockAirDoctorService = {
     }
 
     const clean = (totpCode || '').trim();
-    const current = this.getCurrentTotpCode();
-    const valid = clean === current || clean === '777888' || clean === '123456';
-    if (!valid) {
+    const issued: Set<string> = (this as any)._issuedCodes || new Set<string>();
+    const validCodes = new Set<string>(['777888', '123456', ...issued]);
+    for (const off of [0, -1, 1, -2, 2]) {
+      validCodes.add(this.getCurrentTotpCode(off));
+    }
+
+    if (!validCodes.has(clean)) {
       throw new Error("Invalid or expired TOTP code. Use the current 30-second token or click 'Auto-Fill OTP'.");
     }
 

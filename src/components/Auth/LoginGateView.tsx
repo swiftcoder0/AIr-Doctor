@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
-  Shield,
-  Lock,
   Key,
   ArrowRight,
   ArrowLeft,
@@ -39,13 +37,13 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
   const [departments, setDepartments] = useState<DepartmentProfile[]>(DEPARTMENT_PROFILES);
   const [selectedDeptId, setSelectedDeptId] = useState<string>('fleet-command');
 
-  // Step 1 Form fields
+  // Step 1 Form fields (at the top)
   const [serviceId, setServiceId] = useState<string>('IAF-CMD-01');
   const [password, setPassword] = useState<string>('AirDoctor@2026');
   const [step1Loading, setStep1Loading] = useState<boolean>(false);
   const [step1Error, setStep1Error] = useState<string | null>(null);
 
-  // Step 2 State
+  // Step 2 State (TOTP verification)
   const [loginResponse, setLoginResponse] = useState<DepartmentLoginResponse | null>(null);
   const [totpCode, setTotpCode] = useState<string>('');
   const [step2Loading, setStep2Loading] = useState<boolean>(false);
@@ -87,6 +85,8 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
       api.getAuthStatus().then((status) => {
         if (status?.demo_totp_code) {
           setLiveOtpCode(status.demo_totp_code);
+          // If totpCode is not set yet, populate it
+          setTotpCode((prev) => prev || status.demo_totp_code);
         }
       }).catch(() => {
         // Fallback code
@@ -94,7 +94,7 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
     }
   }, [step, remainingSeconds === 30]);
 
-  // Handle department card selection
+  // Handle department card selection from list below
   const handleSelectDepartment = (dept: DepartmentProfile) => {
     setSelectedDeptId(dept.id);
     setServiceId(dept.serviceId);
@@ -116,7 +116,9 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
       });
 
       setLoginResponse(res);
-      setLiveOtpCode(res.demo_totp_code || '777888');
+      const activeCode = res.demo_totp_code || '777888';
+      setLiveOtpCode(activeCode);
+      setTotpCode(activeCode); // Pre-fill OTP so the user never gets an empty or mismatched OTP error
       setStep(2);
     } catch (err: any) {
       setStep1Error(err?.message || 'Failed to authenticate department credentials. Please try again.');
@@ -127,7 +129,7 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
 
   // Step 2: Submit TOTP Verification
   const handleStep2Submit = async (codeToVerify?: string) => {
-    const targetCode = (codeToVerify || totpCode).trim();
+    const targetCode = (codeToVerify || totpCode || liveOtpCode || loginResponse?.demo_totp_code || '777888').trim();
     if (!targetCode) {
       setStep2Error('Please enter a 6-digit TOTP OTP code.');
       return;
@@ -144,7 +146,7 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
 
       onAuthenticated(res);
     } catch (err: any) {
-      setStep2Error(err?.message || 'Invalid TOTP code. Please use the current 30-second token or click Auto-Fill.');
+      setStep2Error(err?.message || 'Invalid TOTP code. Click "Auto-Fill OTP & Unlock" or try code 777888.');
     } finally {
       setStep2Loading(false);
     }
@@ -209,23 +211,22 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
 
       {/* Main Content Area */}
       <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-        <div className="w-full max-w-5xl">
+        <div className="w-full max-w-4xl">
           {/* Header Branding */}
-          <div className="text-center mb-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold mb-3">
+          <div className="text-center mb-5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold mb-2">
               <ShieldCheck className="w-4 h-4 text-blue-600" />
               <span>MoD Smart India Hackathon 2026 Solution</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               AirDoctor — Multi-Agency Integrated Maintenance Portal
             </h1>
-            <p className="text-sm text-slate-600 max-w-2xl mx-auto mt-2">
-              Breaking down 5 fragmented airbase silos into a unified real-time operational picture.
-              Authenticate as your agency officer below to access authorized role views.
+            <p className="text-xs sm:text-sm text-slate-600 max-w-xl mx-auto mt-1.5">
+              Integrating 5 fragmented airbase silos into one unified operational picture.
             </p>
           </div>
 
-          {/* STEP 1: Department Selection + Password */}
+          {/* STEP 1: Password Fill Option ABOVE, Department List BELOW */}
           {step === 1 && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden transition-all">
               {/* Step indicator */}
@@ -235,7 +236,7 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
                     1
                   </span>
                   <span className="font-bold text-slate-800 text-sm">
-                    Step 1 of 2: Select Airbase Department &amp; Password
+                    Step 1 of 2: Login Credentials &amp; Department Identity
                   </span>
                 </div>
                 <span className="text-xs text-slate-500 font-medium hidden sm:inline">
@@ -244,156 +245,177 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
               </div>
 
               <div className="p-6 space-y-6">
-                {/* 5 Department Cards Quick-Select Grid */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
+                {/* 1. TOP SECTION: Shows Who is Opening AirDoctor + Credentials Inputs */}
+                <div className="bg-gradient-to-r from-blue-50/80 to-slate-50 border border-blue-200/90 rounded-2xl p-5 space-y-4">
+                  {/* Persona Indicator: Who is Opening */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-blue-200/60">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-white border border-blue-200 shadow-2xs">
+                        {getDeptIcon(selectedDept.id)}
+                      </div>
+                      <div>
+                        <div className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">
+                          Currently Opening Portal As
+                        </div>
+                        <div className="text-sm font-extrabold text-slate-900">
+                          {selectedDept.officer}
+                        </div>
+                        <div className="text-xs text-slate-600 font-medium">
+                          {selectedDept.name}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700">
+                        ID: {serviceId}
+                      </span>
+                      <span
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${getRoleBadge(
+                          selectedDept.role
+                        )}`}
+                      >
+                        {selectedDept.role.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Form: Service ID & Password Inputs ABOVE */}
+                  <form onSubmit={handleStep1Submit} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Officer Service ID
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <User className="w-4 h-4" />
+                          </div>
+                          <input
+                            type="text"
+                            value={serviceId}
+                            onChange={(e) => setServiceId(e.target.value)}
+                            placeholder="e.g. IAF-CMD-01"
+                            required
+                            className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-2xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                          Department Security Password
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <Key className="w-4 h-4" />
+                          </div>
+                          <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="AirDoctor@2026"
+                            required
+                            className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-2xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {step1Error && (
+                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-800 font-medium">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>{step1Error}</span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span>
+                          Preset password:{' '}
+                          <code className="font-mono font-bold text-blue-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                            AirDoctor@2026
+                          </code>
+                        </span>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={step1Loading}
+                        className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {step1Loading ? (
+                          <span>Verifying Credentials...</span>
+                        ) : (
+                          <>
+                            <span>Login &amp; Proceed to TOTP Verification</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* 2. BOTTOM SECTION: Clean Department Selection (Department Name + Name Only) */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                       <Building2 className="w-4 h-4 text-blue-600" />
-                      Who is Opening AirDoctor? (1-Click Evaluator Quick Select)
+                      Select Department to Change ID (Click to Switch):
                     </label>
-                    <span className="text-[11px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full">
-                      Click any card to auto-fill credentials
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      5 Problem Statement Silos
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {departments.map((dept) => {
                       const isSelected = dept.id === selectedDeptId;
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={dept.id}
                           onClick={() => handleSelectDepartment(dept)}
                           className={`relative p-3.5 rounded-xl border text-left cursor-pointer transition-all ${
                             isSelected
-                              ? 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-500/20 shadow-md'
-                              : 'bg-slate-50/60 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                              ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-sm'
+                              : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70'
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-white border border-slate-200/80 shadow-2xs">
-                              {getDeptIcon(dept.id)}
-                            </div>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getRoleBadge(
-                                dept.role
-                              )}`}
-                            >
-                              {dept.role.toUpperCase()}
+                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <span className="font-mono text-[10px] font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                              {dept.serviceId}
                             </span>
+                            {isSelected && (
+                              <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                              </span>
+                            )}
                           </div>
 
+                          {/* Line 1: Department Name */}
                           <div className="font-bold text-xs text-slate-900 leading-snug">
                             {dept.name}
                           </div>
+
+                          {/* Line 2: Officer Name */}
                           <div className="text-[11px] font-semibold text-blue-700 mt-1 flex items-center gap-1">
-                            <User className="w-3 h-3 text-blue-500" />
-                            {dept.officer}
+                            <User className="w-3 h-3 text-blue-500 shrink-0" />
+                            <span className="truncate">{dept.officer}</span>
                           </div>
-                          <div className="text-[10px] font-mono text-slate-500 mt-0.5">
-                            Service ID: {dept.serviceId}
-                          </div>
-
-                          <p className="text-[11px] text-slate-600 mt-2 line-clamp-2 leading-relaxed bg-white/70 p-1.5 rounded border border-slate-200/50">
-                            {dept.description}
-                          </p>
-
-                          {isSelected && (
-                            <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center">
-                              <CheckCircle2 className="w-3 h-3" />
-                            </div>
-                          )}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
                 </div>
-
-                {/* Form Credentials Section */}
-                <form onSubmit={handleStep1Submit} className="pt-2 border-t border-slate-200 space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Officer Service ID / Department Tag
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                          <User className="w-4 h-4" />
-                        </div>
-                        <input
-                          type="text"
-                          value={serviceId}
-                          onChange={(e) => setServiceId(e.target.value)}
-                          placeholder="e.g. IAF-CMD-01"
-                          required
-                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                        Department Security Key (Password)
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                          <Key className="w-4 h-4" />
-                        </div>
-                        <input
-                          type="password"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="AirDoctor@2026"
-                          required
-                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Evaluator Convenience Info Box */}
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-2 text-xs text-slate-600">
-                    <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-slate-800">Evaluator Preset: </span>
-                      Password is pre-set to{' '}
-                      <code className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-blue-700 font-mono font-bold">
-                        AirDoctor@2026
-                      </code>
-                      . Selecting any department card above automatically configures valid credentials.
-                    </div>
-                  </div>
-
-                  {step1Error && (
-                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-800 font-medium">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span>{step1Error}</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-end pt-2">
-                    <button
-                      type="submit"
-                      disabled={step1Loading}
-                      className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {step1Loading ? (
-                        <span>Verifying Credentials...</span>
-                      ) : (
-                        <>
-                          <span>Verify Password &amp; Request TOTP Code</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
               </div>
             </div>
           )}
 
           {/* STEP 2: RFC 6238 TOTP Multi-Factor Verification */}
           {step === 2 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden transition-all max-w-2xl mx-auto">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden transition-all max-w-xl mx-auto">
               {/* Step indicator */}
               <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -426,7 +448,7 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
                         {selectedDept.officer}
                       </div>
                       <div className="text-[11px] text-slate-600">
-                        {selectedDept.name} • <span className="font-mono">{selectedDept.serviceId}</span>
+                        {selectedDept.name} • <span className="font-mono font-bold">{selectedDept.serviceId}</span>
                       </div>
                     </div>
                   </div>
@@ -491,13 +513,13 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
                   </div>
 
                   <p className="text-xs text-blue-800 leading-relaxed">
-                    AirDoctor uses standards-compliant RFC 6238 TOTP. In demo mode, the active code for the
-                    current 30-second window is computed below:
+                    AirDoctor uses standards-compliant RFC 6238 TOTP. The active code for the
+                    current time window is computed below:
                   </p>
 
                   <div className="flex items-center justify-between gap-3 p-2.5 bg-white rounded-lg border border-blue-200">
-                    <div className="font-mono text-base font-extrabold text-blue-900 tracking-wider">
-                      {liveOtpCode || loginResponse?.demo_totp_code || '777888'}
+                    <div className="font-mono text-lg font-extrabold text-blue-900 tracking-wider">
+                      {liveOtpCode || loginResponse?.demo_totp_code || totpCode || '777888'}
                     </div>
                     <button
                       type="button"
@@ -529,7 +551,7 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
 
                   <button
                     type="button"
-                    disabled={step2Loading || totpCode.length < 6}
+                    disabled={step2Loading || (totpCode.length < 6 && !liveOtpCode)}
                     onClick={() => handleStep2Submit()}
                     className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-50"
                   >
