@@ -1,27 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ShieldCheck,
-  Key,
+  Shield,
+  User,
+  Lock,
+  Eye,
+  EyeOff,
   ArrowRight,
   ArrowLeft,
-  CheckCircle2,
-  AlertTriangle,
-  Building2,
-  User,
-  Clock,
-  Sparkles,
+  ChevronDown,
   Plane,
+  Activity,
   FileText,
   Boxes,
   Wrench,
-  Compass,
+  AlertTriangle,
+  Building2,
 } from 'lucide-react';
 import {
   DepartmentProfile,
   DepartmentLoginResponse,
   VerifyDepartmentTotpResponse,
   DEPARTMENT_PROFILES,
-  UserRole,
 } from '../../types/aircraft';
 import { api } from '../../services/apiClient';
 
@@ -37,9 +36,10 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
   const [departments, setDepartments] = useState<DepartmentProfile[]>(DEPARTMENT_PROFILES);
   const [selectedDeptId, setSelectedDeptId] = useState<string>('fleet-command');
 
-  // Step 1 Form fields (at the top)
+  // Step 1 Form fields
   const [serviceId, setServiceId] = useState<string>('IAF-CMD-01');
   const [password, setPassword] = useState<string>('AirDoctor@2026');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [step1Loading, setStep1Loading] = useState<boolean>(false);
   const [step1Error, setStep1Error] = useState<string | null>(null);
 
@@ -85,7 +85,6 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
       api.getAuthStatus().then((status) => {
         if (status?.demo_totp_code) {
           setLiveOtpCode(status.demo_totp_code);
-          // If totpCode is not set yet, populate it
           setTotpCode((prev) => prev || status.demo_totp_code);
         }
       }).catch(() => {
@@ -98,7 +97,6 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
   const handleSelectDepartment = (dept: DepartmentProfile) => {
     setSelectedDeptId(dept.id);
     setServiceId(dept.serviceId);
-    setPassword('AirDoctor@2026'); // Evaluator 1-click convenience
     setStep1Error(null);
   };
 
@@ -118,7 +116,7 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
       setLoginResponse(res);
       const activeCode = res.demo_totp_code || '777888';
       setLiveOtpCode(activeCode);
-      setTotpCode(activeCode); // Pre-fill OTP so the user never gets an empty or mismatched OTP error
+      setTotpCode(activeCode); // Pre-populate OTP for seamless verification
       setStep(2);
     } catch (err: any) {
       setStep1Error(err?.message || 'Failed to authenticate department credentials. Please try again.');
@@ -146,347 +144,293 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
 
       onAuthenticated(res);
     } catch (err: any) {
-      setStep2Error(err?.message || 'Invalid TOTP code. Click "Auto-Fill OTP & Unlock" or try code 777888.');
+      setStep2Error(err?.message || 'Invalid TOTP code. Click "Verify & Continue" or try code 777888.');
     } finally {
       setStep2Loading(false);
     }
   };
 
-  // 1-Click Auto Fill & Unlock for evaluators
-  const handleAutoFillAndSubmit = () => {
-    const code = liveOtpCode || loginResponse?.demo_totp_code || '777888';
-    setTotpCode(code);
-    handleStep2Submit(code);
-  };
-
   const selectedDept = departments.find((d) => d.id === selectedDeptId) || departments[0];
 
-  const getDeptIcon = (id: string) => {
+  const getDeptDisplayTitle = (id: string): string => {
     switch (id) {
       case 'fleet-command':
-        return <Plane className="w-5 h-5 text-emerald-600" />;
+        return 'Air Fleet Command';
       case 'health-diagnostics':
-        return <Compass className="w-5 h-5 text-blue-600" />;
+        return 'Aircraft Health & Diagnostics';
       case 'tech-records':
-        return <FileText className="w-5 h-5 text-indigo-600" />;
+        return 'Technical Records & Quality';
       case 'logistics-spares':
-        return <Boxes className="w-5 h-5 text-amber-600" />;
+        return 'Logistics & Spares';
       case 'maintenance-agency':
-        return <Wrench className="w-5 h-5 text-slate-700" />;
+        return 'Maintenance Agency';
       default:
-        return <Building2 className="w-5 h-5 text-blue-600" />;
+        return 'Airbase Department';
     }
   };
 
-  const getRoleBadge = (role: UserRole) => {
-    switch (role) {
-      case 'Commander':
-        return 'bg-emerald-100 text-emerald-800 border-emerald-300';
-      case 'Planner':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'Viewer':
-        return 'bg-slate-100 text-slate-700 border-slate-300';
+  const getDeptIcon = (id: string, isSelected: boolean) => {
+    const iconClass = `w-5 h-5 transition-colors ${isSelected ? 'text-blue-600' : 'text-slate-600'}`;
+    switch (id) {
+      case 'fleet-command':
+        return <Plane className={iconClass} />;
+      case 'health-diagnostics':
+        return <Activity className={iconClass} />;
+      case 'tech-records':
+        return <FileText className={iconClass} />;
+      case 'logistics-spares':
+        return <Boxes className={iconClass} />;
+      case 'maintenance-agency':
+        return <Wrench className={iconClass} />;
+      default:
+        return <Building2 className={iconClass} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans select-none text-slate-800">
-      {/* Top Persistent Synthetic Data Banner */}
-      <div className="bg-slate-900 text-slate-200 border-b border-slate-800 px-6 py-2 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="font-mono font-bold tracking-wider text-slate-100">
-            MINISTRY OF DEFENCE • DEFENCE LOGISTICS &amp; READINESS
+      {/* Slim Header matching existing AirDoctor theme */}
+      <header className="h-14 bg-white border-b border-slate-200/80 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-20">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shadow-2xs">
+            <svg
+              className="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.3c.4-.2.6-.6.5-1.1z" />
+            </svg>
+          </div>
+          <span className="text-lg font-extrabold tracking-tight text-slate-900">
+            AirDoctor
+          </span>
+          <div className="h-4 w-px bg-slate-300 mx-1 hidden sm:block" />
+          <span className="text-[11px] font-semibold tracking-wider text-slate-500 uppercase font-mono hidden sm:inline">
+            Aircraft Maintenance Intelligence
           </span>
         </div>
-        <div className="hidden md:flex items-center gap-3">
-          <span className="px-2.5 py-0.5 rounded-full bg-slate-800 text-[11px] font-mono text-emerald-400 font-semibold border border-slate-700">
-            SYNTHETIC / UNCLASSIFIED DATA — SIMULATED DEMO WORKFLOW
-          </span>
-          <span className="text-slate-400 font-mono text-[11px]">
-            RFC 9106 ARGON2ID + RFC 6238 TOTP ACTIVE
-          </span>
-        </div>
-      </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-        <div className="w-full max-w-4xl">
-          {/* Header Branding */}
-          <div className="text-center mb-5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold mb-2">
-              <ShieldCheck className="w-4 h-4 text-blue-600" />
-              <span>MoD Smart India Hackathon 2026 Solution</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              AirDoctor — Multi-Agency Integrated Maintenance Portal
+        {/* Secure Access Status Indicator */}
+        <div className="flex items-center gap-2 text-xs font-semibold tracking-wider text-slate-600 font-mono">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-[11px]">SECURE ACCESS</span>
+        </div>
+      </header>
+
+      {/* Center Canvas */}
+      <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
+        <div className="w-full max-w-xl">
+          {/* Page Titles */}
+          <div className="text-center mb-6">
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+              {step === 1 ? 'Welcome to AirDoctor' : 'Two-Factor Authentication'}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600 max-w-xl mx-auto mt-1.5">
-              Integrating 5 fragmented airbase silos into one unified operational picture.
+            <p className="text-sm text-slate-600 mt-1.5">
+              {step === 1
+                ? 'Sign in to your department workspace.'
+                : 'Enter your 6-digit Time-Based Verification Code.'}
             </p>
           </div>
 
-          {/* STEP 1: Password Fill Option ABOVE, Department List BELOW */}
-          {step === 1 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden transition-all">
-              {/* Step indicator */}
-              <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
-                    1
-                  </span>
-                  <span className="font-bold text-slate-800 text-sm">
-                    Step 1 of 2: Login Credentials &amp; Department Identity
-                  </span>
-                </div>
-                <span className="text-xs text-slate-500 font-medium hidden sm:inline">
-                  Step 2 requires Time-Based OTP (RFC 6238)
-                </span>
-              </div>
-
-              <div className="p-6 space-y-6">
-                {/* 1. TOP SECTION: Shows Who is Opening AirDoctor + Credentials Inputs */}
-                <div className="bg-gradient-to-r from-blue-50/80 to-slate-50 border border-blue-200/90 rounded-2xl p-5 space-y-4">
-                  {/* Persona Indicator: Who is Opening */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-blue-200/60">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-xl bg-white border border-blue-200 shadow-2xs">
-                        {getDeptIcon(selectedDept.id)}
-                      </div>
-                      <div>
-                        <div className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">
-                          Currently Opening Portal As
-                        </div>
-                        <div className="text-sm font-extrabold text-slate-900">
-                          {selectedDept.officer}
-                        </div>
-                        <div className="text-xs text-slate-600 font-medium">
-                          {selectedDept.name}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700">
-                        ID: {serviceId}
-                      </span>
-                      <span
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${getRoleBadge(
-                          selectedDept.role
-                        )}`}
-                      >
-                        {selectedDept.role.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Form: Service ID & Password Inputs ABOVE */}
-                  <form onSubmit={handleStep1Submit} className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                          Officer Service ID
-                        </label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                            <User className="w-4 h-4" />
-                          </div>
-                          <input
-                            type="text"
-                            value={serviceId}
-                            onChange={(e) => setServiceId(e.target.value)}
-                            placeholder="e.g. IAF-CMD-01"
-                            required
-                            className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-2xs"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                          Department Security Password
-                        </label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                            <Key className="w-4 h-4" />
-                          </div>
-                          <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="AirDoctor@2026"
-                            required
-                            className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-2xs"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {step1Error && (
-                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-800 font-medium">
-                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                        <span>{step1Error}</span>
-                      </div>
-                    )}
-
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                        <span>
-                          Preset password:{' '}
-                          <code className="font-mono font-bold text-blue-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                            AirDoctor@2026
-                          </code>
-                        </span>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={step1Loading}
-                        className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        {step1Loading ? (
-                          <span>Verifying Credentials...</span>
-                        ) : (
-                          <>
-                            <span>Login &amp; Proceed to TOTP Verification</span>
-                            <ArrowRight className="w-4 h-4" />
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-
-                {/* 2. BOTTOM SECTION: Clean Department Selection (Department Name + Name Only) */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                      <Building2 className="w-4 h-4 text-blue-600" />
-                      Select Department to Change ID (Click to Switch):
+          {/* Authentication Card */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 sm:p-7 space-y-6">
+            {step === 1 ? (
+              <form onSubmit={handleStep1Submit} className="space-y-6">
+                {/* Department Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Department
                     </label>
-                    <span className="text-[11px] text-slate-500 font-medium">
-                      5 Problem Statement Silos
-                    </span>
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
                   </div>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Select your department to continue
+                  </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {departments.map((dept) => {
-                      const isSelected = dept.id === selectedDeptId;
-                      return (
-                        <button
-                          type="button"
-                          key={dept.id}
-                          onClick={() => handleSelectDepartment(dept)}
-                          className={`relative p-3.5 rounded-xl border text-left cursor-pointer transition-all ${
-                            isSelected
-                              ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-sm'
-                              : 'bg-slate-50/70 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
-                            <span className="font-mono text-[10px] font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                              {dept.serviceId}
-                            </span>
-                            {isSelected && (
-                              <span className="w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Line 1: Department Name */}
-                          <div className="font-bold text-xs text-slate-900 leading-snug">
-                            {dept.name}
-                          </div>
-
-                          {/* Line 2: Officer Name */}
-                          <div className="text-[11px] font-semibold text-blue-700 mt-1 flex items-center gap-1">
-                            <User className="w-3 h-3 text-blue-500 shrink-0" />
-                            <span className="truncate">{dept.officer}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: RFC 6238 TOTP Multi-Factor Verification */}
-          {step === 2 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden transition-all max-w-xl mx-auto">
-              {/* Step indicator */}
-              <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold">
-                    2
-                  </span>
-                  <span className="font-bold text-slate-800 text-sm">
-                    Step 2 of 2: Time-Based OTP (TOTP) Verification
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Change Department</span>
-                </button>
-              </div>
-
-              <div className="p-6 space-y-6">
-                {/* Officer & Role Profile Banner */}
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                      {getDeptIcon(selectedDept.id)}
+                  {/* 5 Department Cards Grid (3 in top row, 2 in bottom row) */}
+                  <div className="space-y-2.5">
+                    {/* Row 1: 3 cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {departments.slice(0, 3).map((dept) => {
+                        const isSelected = dept.id === selectedDeptId;
+                        return (
+                          <button
+                            type="button"
+                            key={dept.id}
+                            onClick={() => handleSelectDepartment(dept)}
+                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between min-h-[95px] cursor-pointer ${
+                              isSelected
+                                ? 'border-blue-600 bg-blue-50/40 text-blue-900 ring-1 ring-blue-600/20 shadow-2xs'
+                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50 text-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full mb-3">
+                              {getDeptIcon(dept.id, isSelected)}
+                              {isSelected ? (
+                                <span className="w-3.5 h-3.5 rounded-full border-2 border-blue-600 flex items-center justify-center">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                                </span>
+                              ) : (
+                                <span className="w-3.5 h-3.5 rounded-full border border-slate-300" />
+                              )}
+                            </div>
+                            <div className="font-bold text-xs leading-snug">
+                              {getDeptDisplayTitle(dept.id)}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">
-                        {selectedDept.officer}
-                      </div>
-                      <div className="text-[11px] text-slate-600">
-                        {selectedDept.name} • <span className="font-mono font-bold">{selectedDept.serviceId}</span>
-                      </div>
+
+                    {/* Row 2: 2 cards aligned with the grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {departments.slice(3, 5).map((dept) => {
+                        const isSelected = dept.id === selectedDeptId;
+                        return (
+                          <button
+                            type="button"
+                            key={dept.id}
+                            onClick={() => handleSelectDepartment(dept)}
+                            className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between min-h-[95px] cursor-pointer ${
+                              isSelected
+                                ? 'border-blue-600 bg-blue-50/40 text-blue-900 ring-1 ring-blue-600/20 shadow-2xs'
+                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50 text-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full mb-3">
+                              {getDeptIcon(dept.id, isSelected)}
+                              {isSelected ? (
+                                <span className="w-3.5 h-3.5 rounded-full border-2 border-blue-600 flex items-center justify-center">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+                                </span>
+                              ) : (
+                                <span className="w-3.5 h-3.5 rounded-full border border-slate-300" />
+                              )}
+                            </div>
+                            <div className="font-bold text-xs leading-snug">
+                              {getDeptDisplayTitle(dept.id)}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-bold border ${getRoleBadge(
-                      selectedDept.role
-                    )}`}
-                  >
-                    {selectedDept.role.toUpperCase()}
-                  </span>
                 </div>
 
-                {/* 30-Second RFC 6238 Countdown Bar */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-medium">
-                    <span className="flex items-center gap-1.5 text-slate-700">
-                      <Clock className="w-3.5 h-3.5 text-blue-600" />
-                      <span>RFC 6238 TOTP Cycle Validity</span>
-                    </span>
-                    <span className="font-mono font-bold text-blue-700">
-                      {remainingSeconds}s remaining
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
-                    <div
-                      className={`h-full transition-all duration-1000 ${
-                        remainingSeconds > 10 ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
-                      }`}
-                      style={{ width: `${(remainingSeconds / 30) * 100}%` }}
+                {/* Personnel ID Input */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Personnel ID
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={serviceId}
+                      onChange={(e) => setServiceId(e.target.value)}
+                      placeholder="Enter your personnel ID"
+                      required
+                      className="w-full pl-10 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-2xs"
                     />
                   </div>
                 </div>
 
+                {/* Password Input with Visibility Toggle */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      required
+                      className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-2xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {step1Error && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-800 font-medium">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{step1Error}</span>
+                  </div>
+                )}
+
+                {/* Primary CTA Button */}
+                <button
+                  type="submit"
+                  disabled={step1Loading}
+                  className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {step1Loading ? (
+                    <span>Authenticating...</span>
+                  ) : (
+                    <>
+                      <span>Continue</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                {/* Card Sub-footer */}
+                <div className="pt-3 border-t border-slate-100 flex flex-col items-center justify-center text-center">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                    <Shield className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Authorised access only</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    Session activity is logged.
+                  </div>
+                </div>
+              </form>
+            ) : (
+              /* STEP 2: TOTP Verification */
+              <div className="space-y-6">
+                {/* Department badge summary */}
+                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center gap-2.5">
+                    {getDeptIcon(selectedDept.id, true)}
+                    <span className="font-bold text-xs text-slate-800">
+                      {getDeptDisplayTitle(selectedDept.id)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
+                  >
+                    Change
+                  </button>
+                </div>
+
                 {/* 6-Digit OTP Input */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 text-center">
-                    Enter 6-Digit Authenticator OTP Code
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Verification Code
+                    </label>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      Refreshes in {remainingSeconds}s
+                    </span>
+                  </div>
+
                   <div className="flex justify-center">
                     <input
                       type="text"
@@ -494,42 +438,20 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
                       value={totpCode}
                       onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
                       placeholder="••••••"
-                      className="w-56 py-3 px-4 bg-slate-50 border-2 border-slate-300 rounded-xl text-2xl font-mono font-extrabold text-slate-900 tracking-[0.5em] text-center focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all shadow-inner"
+                      className="w-full py-3 px-4 bg-white border border-slate-200 rounded-xl text-2xl font-mono font-bold text-slate-900 tracking-[0.4em] text-center focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all shadow-inner"
                       autoFocus
                     />
                   </div>
                 </div>
 
-                {/* Evaluator Demo Helper Box */}
-                <div className="p-4 rounded-xl bg-blue-50/80 border border-blue-200 space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
-                      <ShieldCheck className="w-4 h-4 text-blue-700" />
-                      <span>Evaluator Demo Helper</span>
-                    </div>
-                    <span className="text-[10px] bg-blue-200/80 text-blue-800 font-mono font-bold px-2 py-0.5 rounded">
-                      ACTIVE RFC 6238 TOKEN
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-blue-800 leading-relaxed">
-                    AirDoctor uses standards-compliant RFC 6238 TOTP. The active code for the
-                    current time window is computed below:
-                  </p>
-
-                  <div className="flex items-center justify-between gap-3 p-2.5 bg-white rounded-lg border border-blue-200">
-                    <div className="font-mono text-lg font-extrabold text-blue-900 tracking-wider">
-                      {liveOtpCode || loginResponse?.demo_totp_code || totpCode || '777888'}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleAutoFillAndSubmit}
-                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Auto-Fill OTP &amp; Unlock</span>
-                    </button>
-                  </div>
+                {/* Subtle Progress Bar */}
+                <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden border border-slate-200">
+                  <div
+                    className={`h-full transition-all duration-1000 ${
+                      remainingSeconds > 10 ? 'bg-blue-600' : 'bg-amber-500 animate-pulse'
+                    }`}
+                    style={{ width: `${(remainingSeconds / 30) * 100}%` }}
+                  />
                 </div>
 
                 {step2Error && (
@@ -539,39 +461,46 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
                   </div>
                 )}
 
-                {/* Submit Actions */}
-                <div className="flex items-center justify-between pt-2">
+                {/* Verify & Continue Button */}
+                <button
+                  type="button"
+                  disabled={step2Loading || (!totpCode && !liveOtpCode)}
+                  onClick={() => handleStep2Submit()}
+                  className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {step2Loading ? (
+                    <span>Verifying Code...</span>
+                  ) : (
+                    <>
+                      <span>Verify &amp; Continue</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                <div className="text-center">
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition-all cursor-pointer"
+                    className="text-xs text-slate-500 hover:text-slate-800 transition-colors cursor-pointer inline-flex items-center gap-1"
                   >
-                    ← Back to Step 1
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={step2Loading || (totpCode.length < 6 && !liveOtpCode)}
-                    onClick={() => handleStep2Submit()}
-                    className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    {step2Loading ? (
-                      <span>Verifying Token...</span>
-                    ) : (
-                      <>
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Verify OTP &amp; Access Portal</span>
-                      </>
-                    )}
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Back to department selection</span>
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* Footer note */}
-          <div className="text-center text-xs text-slate-500 mt-6">
-            Protected under Ministry of Defence RBAC &amp; SHA-256 Tamper-Evident Ledger Integrity Protocols
+                {/* Card Sub-footer */}
+                <div className="pt-3 border-t border-slate-100 flex flex-col items-center justify-center text-center">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                    <Shield className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Authorised access only</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    Session activity is logged.
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
