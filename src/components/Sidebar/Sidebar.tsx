@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { BaseId, UserRole } from '../../types/aircraft';
 import { baseList } from '../../data/aircraftData';
+import iafFighterImg from '../../assets/iaf_fighter_tarmac.jpg';
 
 interface SidebarProps {
   activeNav: string;
@@ -92,16 +93,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const currentBase = baseList.find((b) => b.id === selectedBaseId) || baseList[0];
 
   return (
-    <aside
-      className="w-64 h-[calc(100vh-3.5rem)] sticky top-14 flex flex-col justify-between py-4 px-3 select-none text-white z-20 shrink-0 overflow-hidden border-r border-slate-800/80 bg-[#0F172A]/90 backdrop-blur-md"
-      style={{
-        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(10, 17, 40, 0.88) 50%, rgba(8, 14, 34, 0.96) 100%)',
-      }}
-    >
-      <div className="space-y-4">
+    <aside className="w-64 h-[calc(100vh-3.5rem)] sticky top-14 flex flex-col justify-between py-4 px-3 select-none text-white z-20 shrink-0 overflow-hidden relative border-r border-slate-800/80 bg-[#0F172A]">
+      {/* 
+        Transparent Navy Blue Background with Aircraft on Tarmac matching reference image.
+        Uses bundled asset to ensure zero 404s or server errors on any deployment.
+      */}
+      <div
+        className="absolute inset-0 pointer-events-none z-0"
+        style={{
+          backgroundImage: `linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(15, 23, 42, 0.90) 35%, rgba(10, 18, 42, 0.45) 65%, rgba(8, 14, 32, 0.88) 100%), url('${iafFighterImg}')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'bottom center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      />
+
+      {/* Top Section: Brand & Nav Links */}
+      <div className="relative z-10 space-y-4">
         {/* Exact AirDoctor Logo matching existing specification */}
         <div className="flex items-center gap-2.5 px-3 py-1">
-          <div className="w-9 h-9 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/40 flex items-center justify-center shadow-inner">
+          <div className="w-9 h-9 rounded-xl bg-blue-600/25 text-blue-400 border border-blue-500/40 flex items-center justify-center shadow-inner backdrop-blur-xs">
             <svg
               className="w-5 h-5"
               viewBox="0 0 24 24"
@@ -115,10 +126,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </svg>
           </div>
           <div>
-            <div className="text-base font-black tracking-tight text-white leading-none">
+            <div className="text-base font-black tracking-tight text-white leading-none drop-shadow-xs">
               AirDoctor
             </div>
-            <div className="text-[10px] font-mono text-slate-400 mt-0.5">
+            <div className="text-[10px] font-mono text-slate-300 mt-0.5">
               {isCommander ? 'FLEET COMMAND' : 'AEROSPACE SUITE'}
             </div>
           </div>
@@ -137,10 +148,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   key={item.id}
                   onClick={() => onNavChange(item.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold transition-all backdrop-blur-xs ${
                     isActive
-                      ? 'bg-blue-600/25 text-blue-400 border border-blue-500/40 shadow-xs font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                      ? 'bg-blue-600/30 text-blue-300 border border-blue-400/50 shadow-xs font-bold'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                   }`}
                 >
                   <div className="flex items-center gap-3 truncate text-left">
@@ -173,10 +184,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   key={item.id}
                   onClick={() => onNavChange(item.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all backdrop-blur-xs ${
                     isActive
-                      ? 'bg-blue-600/25 text-blue-400 border border-blue-500/40 shadow-xs font-bold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                      ? 'bg-blue-600/30 text-blue-300 border border-blue-400/50 shadow-xs font-bold'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/50'
                   }`}
                 >
                   <Icon
@@ -192,23 +203,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Bottom Area: Operating Base Selector + Aircraft Image + IAF Inscription */}
-      <div className="space-y-2.5 pt-3 border-t border-slate-800/80 px-1">
+      {/* Bottom Area: Operating Base Selector + IAF Inscription directly over tarmac visual */}
+      <div className="relative z-10 space-y-3 pt-3 border-t border-slate-700/50 px-1">
         {/* Base Selector */}
         <div>
-          <label className="text-[9px] text-slate-400 block font-bold uppercase tracking-wider mb-1">
+          <label className="text-[9px] text-slate-300 block font-bold uppercase tracking-wider mb-1 drop-shadow-xs">
             Focus Airbase
           </label>
           <button
             onClick={() => setShowBaseDropdown(!showBaseDropdown)}
-            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-slate-900/80 border border-slate-700/80 rounded-xl text-xs font-bold text-slate-200 hover:bg-slate-800/80 transition-colors"
+            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-slate-900/80 hover:bg-slate-900/95 border border-slate-700/70 rounded-xl text-xs font-bold text-slate-100 backdrop-blur-xs transition-colors shadow-xs"
           >
             <span className="truncate">{currentBase.name}</span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
           </button>
 
           {showBaseDropdown && (
-            <div className="absolute bottom-36 left-2 right-2 bg-[#1E293B] border border-slate-700 rounded-xl shadow-2xl py-1 z-50 text-xs">
+            <div className="absolute bottom-28 left-2 right-2 bg-[#1E293B]/95 backdrop-blur-md border border-slate-700 rounded-xl shadow-2xl py-1 z-50 text-xs">
               <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-700">
                 Select Operating Airbase
               </div>
@@ -236,32 +247,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Aircraft Image Showcase matching Reference Image */}
-        <div className="relative rounded-xl overflow-hidden border border-slate-700/80 shadow-md group">
-          <img
-            src="/iaf_fighter_tarmac.jpg"
-            alt="IAF Su-30MKI Fighter Jet on Tarmac"
-            className="w-full h-20 object-cover object-center filter brightness-95 contrast-105 group-hover:scale-105 transition-transform duration-500"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0A1128] via-transparent to-transparent opacity-80" />
-          <div className="absolute bottom-1 left-2 right-2 flex items-center justify-between text-[10px]">
-            <span className="font-mono font-bold text-white tracking-wider flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              SU-30MKI • SB-120
-            </span>
-            <span className="text-[8px] font-mono text-slate-200 bg-slate-900/90 px-1 py-0.2 rounded border border-slate-700 font-bold">
-              QRA READY
-            </span>
-          </div>
-        </div>
-
-        {/* IAF Footer Silhouette & Motto */}
-        <div className="pt-1.5 text-center space-y-0.5">
-          <div className="flex items-center justify-center gap-1.5 text-[10px] font-black tracking-widest text-slate-200 uppercase">
-            <span className="w-1 h-3 bg-gradient-to-b from-orange-500 via-white to-green-600 rounded-full inline-block mr-1"></span>
+        {/* IAF Emblem & Inscription sitting over tarmac background */}
+        <div className="pt-2 border-t border-slate-700/40 text-center space-y-0.5">
+          <div className="flex items-center justify-center gap-1.5 text-[10px] font-black tracking-widest text-white uppercase drop-shadow-sm">
+            <span className="w-1.5 h-3 bg-gradient-to-b from-orange-500 via-white to-green-600 rounded-full inline-block mr-1"></span>
             <span>INDIAN AIR FORCE</span>
           </div>
-          <div className="text-[8px] font-bold tracking-wider text-slate-400 uppercase">
+          <div className="text-[8px] font-bold tracking-wider text-slate-300 uppercase drop-shadow-xs">
             INTEGRITY • PRECISION • READINESS
           </div>
         </div>
