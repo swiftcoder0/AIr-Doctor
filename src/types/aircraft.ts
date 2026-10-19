@@ -450,14 +450,14 @@ export const DEPARTMENT_PROFILES: DepartmentProfile[] = [
   },
   {
     id: 'maintenance-agency',
-    name: 'Maintenance Agency (Hangar Bays & Technician Shifts)',
+    name: 'Maintenance Control Centre (Hangar Bays & Work Orders)',
     officer: 'MWO R. Sharma (Hangar Floor Controller)',
     serviceId: 'IAF-MNT-05',
     role: 'Viewer',
     defaultTab: 'work-orders',
-    description: 'Hangar bay occupancy, specialist technician shifts & 3-gate Ready-to-Fly schedule',
+    description: 'Hangar bay occupancy, specialist technician shifts & 7-stage repair workflow timeline',
     badgeColor: 'bg-slate-700 text-white',
-    agencyLabel: 'Hangar Floor & Technicians',
+    agencyLabel: 'Maintenance Control Centre',
   },
 ];
 
@@ -824,6 +824,160 @@ export interface SupplyOptionItem {
   eta_or_lead_time: string;
   details: string;
   badge?: string;
+}
+
+// -------------------------------------------------------------
+// Maintenance Control Centre Types
+// -------------------------------------------------------------
+export type MaintenanceStageCode =
+  | 'WO_CREATED'
+  | 'AIRCRAFT_RECEIVED'
+  | 'INSPECTION_DIAGNOSIS'
+  | 'AWAITING_PARTS'
+  | 'REPAIR_TESTING'
+  | 'INSPECTION_SIGNOFF'
+  | 'RETURN_TO_SERVICE';
+
+export interface MaintenanceWorkflowStage {
+  step: number;
+  name: string;
+  code: MaintenanceStageCode;
+  status: 'completed' | 'active' | 'blocked' | 'upcoming';
+  actual_time?: string;
+  expected_time?: string;
+  responsible?: string;
+  notes?: string;
+  blocker_detail?: string;
+}
+
+export interface MaintenancePartRequirement {
+  part_number: string;
+  part_name: string;
+  required_qty: number;
+  received_qty: number;
+  status: 'In Transit' | 'Received' | 'Awaiting';
+  image_url?: string;
+  linked_request_id?: string;
+}
+
+export interface MaintenanceDocumentItem {
+  id: string;
+  title: string;
+  file_type: string;
+  file_size: string;
+  download_url?: string;
+  linked_ref?: string;
+}
+
+export interface MaintenanceActivityItem {
+  id: string;
+  title: string;
+  timestamp: string;
+  actor: string;
+  icon_type: 'dispatch' | 'inspection' | 'received' | 'created' | 'update' | 'signoff';
+  notes?: string;
+}
+
+export interface MaintenanceBlockingItem {
+  id: string;
+  name: string;
+  status: string;
+  link_tab?: string;
+  link_id?: string;
+}
+
+export interface MaintenanceWorkOrderItem {
+  id: string;
+  aircraft: string;
+  aircraft_model: string;
+  issue: string;
+  priority: 'High' | 'Medium' | 'Low';
+  current_stage: string;
+  stage_index: number;
+  eta: string;
+  expected_completion: string;
+  status: 'In Progress' | 'Inspection' | 'Completed' | 'Delayed' | 'Awaiting Parts';
+  assigned_team: string;
+  assigned_bay: string;
+  assigned_tech: string;
+  opened_date: string;
+  estimated_duration: string;
+  delay_reason?: string;
+  linked_requests?: string;
+  blocking_items: MaintenanceBlockingItem[];
+  next_action: string;
+  image_url?: string;
+  stages: MaintenanceWorkflowStage[];
+  required_parts: MaintenancePartRequirement[];
+  related_documents: MaintenanceDocumentItem[];
+  activity_log: MaintenanceActivityItem[];
+  base_id: string;
+}
+
+export interface MaintenanceKpiSummary {
+  assigned_work_orders: number;
+  assigned_delta: string;
+  in_progress: number;
+  awaiting_parts: number;
+  ready_for_inspection: number;
+  overdue: number;
+  is_demo_data: boolean;
+}
+
+export interface TechnicianRosterItem {
+  id: string;
+  name: string;
+  badge_number: string;
+  trade: string;
+  qualifications: string[];
+  shift: string;
+  status: 'Available' | 'On Job' | 'On Leave';
+  assigned_work_order?: string;
+  assigned_aircraft?: string;
+  base_id: string;
+  experience_years: number;
+}
+
+export interface HangarBayStatusItem {
+  id: string;
+  name: string;
+  bay_type: string;
+  status: 'Occupied' | 'Available' | 'Maintenance';
+  occupied_by?: string;
+  active_job?: string;
+  estimated_free_time: string;
+  compatible_aircraft: string[];
+  base_id: string;
+  environmental_control: boolean;
+}
+
+export interface UpdateStageRequest {
+  work_order_id: string;
+  target_stage_index: number;
+  stage_name: string;
+  notes?: string;
+  responsible_person?: string;
+  actual_time?: string;
+  expected_time?: string;
+}
+
+export interface InspectionSignOffRequest {
+  work_order_id: string;
+  inspector_name: string;
+  inspector_service_id: string;
+  result: 'PASSED' | 'FAILED';
+  checklist_items: { item: string; passed: boolean; notes?: string }[];
+  sign_off_notes: string;
+  authorize_release: boolean;
+}
+
+export interface ConfirmPartReceiptRequest {
+  work_order_id: string;
+  part_number: string;
+  quantity_received: number;
+  received_by: string;
+  storage_location?: string;
+  notes?: string;
 }
 
 

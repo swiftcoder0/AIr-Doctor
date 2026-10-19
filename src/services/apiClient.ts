@@ -46,6 +46,13 @@ import {
   CreateProcurementOrderRequest,
   StockMovementItem,
   ReservePartRequest,
+  MaintenanceWorkOrderItem,
+  MaintenanceKpiSummary,
+  UpdateStageRequest,
+  InspectionSignOffRequest,
+  ConfirmPartReceiptRequest,
+  TechnicianRosterItem,
+  HangarBayStatusItem,
 } from '../types/aircraft';
 import { mockAirDoctorService } from './mockAirDoctorService';
 
@@ -718,7 +725,109 @@ export const api = {
       return mockAirDoctorService.getStockMovements();
     }
   },
+
+  // -------------------------------------------------------------
+  // Maintenance Control Centre API Methods
+  // -------------------------------------------------------------
+  async getMaintenanceKpis(): Promise<MaintenanceKpiSummary> {
+    try {
+      return await fetchJson<MaintenanceKpiSummary>('/maintenance/kpis');
+    } catch {
+      return mockAirDoctorService.getMaintenanceKpis();
+    }
+  },
+
+  async getMaintenanceWorkOrders(params?: {
+    status?: string;
+    priority?: string;
+    search?: string;
+  }): Promise<MaintenanceWorkOrderItem[]> {
+    try {
+      const q = new URLSearchParams();
+      if (params?.status && params.status !== 'All') q.set('status', params.status);
+      if (params?.priority && params.priority !== 'All') q.set('priority', params.priority);
+      if (params?.search) q.set('search', params.search);
+      const url = `/maintenance/work-orders${q.toString() ? `?${q.toString()}` : ''}`;
+      return await fetchJson<MaintenanceWorkOrderItem[]>(url);
+    } catch {
+      return mockAirDoctorService.getMaintenanceWorkOrders(params);
+    }
+  },
+
+  async getMaintenanceWorkOrderDetail(woId: string): Promise<MaintenanceWorkOrderItem> {
+    try {
+      return await fetchJson<MaintenanceWorkOrderItem>(`/maintenance/work-orders/${woId}`);
+    } catch {
+      return mockAirDoctorService.getMaintenanceWorkOrderDetail(woId);
+    }
+  },
+
+  async updateMaintenanceStage(
+    woId: string,
+    req: UpdateStageRequest,
+    role?: string
+  ): Promise<MaintenanceWorkOrderItem> {
+    try {
+      return await fetchJson<MaintenanceWorkOrderItem>(`/maintenance/work-orders/${woId}/update-stage`, {
+        method: 'POST',
+        headers: role ? { 'X-AirDoctor-Role': role } : undefined,
+        body: JSON.stringify(req),
+      });
+    } catch {
+      return mockAirDoctorService.updateMaintenanceStage(woId, req);
+    }
+  },
+
+  async confirmMaintenancePartReceipt(
+    woId: string,
+    req: ConfirmPartReceiptRequest,
+    role?: string
+  ): Promise<MaintenanceWorkOrderItem> {
+    try {
+      return await fetchJson<MaintenanceWorkOrderItem>(`/maintenance/work-orders/${woId}/confirm-part-receipt`, {
+        method: 'POST',
+        headers: role ? { 'X-AirDoctor-Role': role } : undefined,
+        body: JSON.stringify(req),
+      });
+    } catch {
+      return mockAirDoctorService.confirmMaintenancePartReceipt(woId, req);
+    }
+  },
+
+  async recordMaintenanceInspectionSignOff(
+    woId: string,
+    req: InspectionSignOffRequest,
+    role?: string
+  ): Promise<MaintenanceWorkOrderItem> {
+    try {
+      return await fetchJson<MaintenanceWorkOrderItem>(`/maintenance/work-orders/${woId}/sign-off`, {
+        method: 'POST',
+        headers: role ? { 'X-AirDoctor-Role': role } : undefined,
+        body: JSON.stringify(req),
+      });
+    } catch {
+      return mockAirDoctorService.recordMaintenanceInspectionSignOff(woId, req);
+    }
+  },
+
+  async getMaintenanceTechnicians(): Promise<TechnicianRosterItem[]> {
+    try {
+      return await fetchJson<TechnicianRosterItem[]>('/maintenance/technicians');
+    } catch {
+      return mockAirDoctorService.getMaintenanceTechnicians();
+    }
+  },
+
+  async getMaintenanceBays(): Promise<HangarBayStatusItem[]> {
+    try {
+      return await fetchJson<HangarBayStatusItem[]>('/maintenance/bays');
+    } catch {
+      return mockAirDoctorService.getMaintenanceBays();
+    }
+  },
 };
+
+export const apiClient = api;
 
 
 

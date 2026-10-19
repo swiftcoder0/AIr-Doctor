@@ -310,3 +310,49 @@ class StockMovementORM(Base):
     notes = Column(Text, default="")
 
 
+class MaintenanceWorkOrderORM(Base):
+    __tablename__ = "maintenance_work_orders"
+
+    id = Column(String(50), primary_key=True, index=True) # e.g. "WO-1042"
+    aircraft = Column(String(100), nullable=False)
+    aircraft_model = Column(String(100), nullable=False)
+    issue = Column(String(255), nullable=False)
+    priority = Column(String(50), default="Medium") # 'High' | 'Medium' | 'Low'
+    current_stage = Column(String(100), default="Work Order Created")
+    stage_index = Column(Integer, default=1)
+    eta = Column(String(50), default="22 Oct 2026")
+    expected_completion = Column(String(100), default="22 Oct 2026, 16:00")
+    status = Column(String(50), default="In Progress") # 'In Progress' | 'Inspection' | 'Completed' | 'Delayed'
+    assigned_team = Column(String(100), default="Bay 2 – Team Alpha")
+    assigned_bay = Column(String(100), default="Bay 2 (Quick-Turn)")
+    assigned_tech = Column(String(100), default="MWO R. Sharma")
+    opened_date = Column(String(50), default="20 Oct 2026, 09:15")
+    estimated_duration = Column(String(50), default="~ 48 hours")
+    delay_reason = Column(String(255), nullable=True)
+    linked_requests = Column(String(255), nullable=True)
+    next_action = Column(String(255), default="Confirm part receipt and start repair.")
+    image_url = Column(String(255), default="/tejas_hangar.jpg")
+    stages_json = Column(Text, default="[]")
+    required_parts_json = Column(Text, default="[]")
+    related_documents_json = Column(Text, default="[]")
+    activity_log_json = Column(Text, default="[]")
+    blocking_items_json = Column(Text, default="[]")
+    base_id = Column(String(50), default="afs-ambala")
+
+
+class MaintenanceSignOffORM(Base):
+    __tablename__ = "maintenance_sign_offs"
+
+    id = Column(String(50), primary_key=True, index=True) # e.g. "SIG-9912"
+    work_order_id = Column(String(50), nullable=False, index=True)
+    timestamp = Column(String(50), nullable=False)
+    inspector_name = Column(String(100), nullable=False)
+    inspector_service_id = Column(String(50), nullable=False)
+    result = Column(String(50), default="PASSED") # 'PASSED' | 'FAILED'
+    checklist_json = Column(Text, default="[]")
+    notes = Column(Text, default="")
+    release_authorized = Column(Boolean, default=False)
+    ledger_hash = Column(String(64), nullable=True)
+
+
+

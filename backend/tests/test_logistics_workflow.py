@@ -53,6 +53,16 @@ def test_logistics_inventory_single_item_detail():
 
 
 def test_logistics_reserve_part_and_rbac():
+    from backend.database import SessionLocal
+    from backend.models import LogisticsInventoryORM
+    with SessionLocal() as db:
+        item = db.query(LogisticsInventoryORM).filter(LogisticsInventoryORM.id == "inv-04").first()
+        if item and item.usable_qty < 2:
+            item.usable_qty = 6
+            item.reserved_qty = 2
+            item.status = "In Stock"
+            db.commit()
+
     # 1. Viewer role should be denied (403 Forbidden)
     res_forbidden = client.post(
         "/api/logistics/reserve",

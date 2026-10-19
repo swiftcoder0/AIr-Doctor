@@ -39,6 +39,13 @@ import {
   SparesTransferItem,
   ProcurementOrderItem,
   StockMovementItem,
+  MaintenanceWorkOrderItem,
+  MaintenanceKpiSummary,
+  UpdateStageRequest,
+  InspectionSignOffRequest,
+  ConfirmPartReceiptRequest,
+  TechnicianRosterItem,
+  HangarBayStatusItem,
 } from '../types/aircraft';
 import {
   baseList,
@@ -2378,6 +2385,663 @@ export const mockAirDoctorService = {
 
   getStockMovements() {
     return this._inMemoryStockMovements;
+  },
+
+  // -----------------------------------------------------------
+  // Maintenance Control Centre Mock Store & Methods
+  // -----------------------------------------------------------
+  _inMemoryMaintenanceWorkOrders: [
+    {
+      id: 'WO-1042',
+      aircraft: 'Tejas T-04',
+      aircraft_model: 'Tejas Mk1A',
+      issue: 'Landing Gear – Hydraulic Leak',
+      priority: 'High' as const,
+      current_stage: 'Awaiting Parts',
+      stage_index: 4,
+      eta: '22 Oct 2026',
+      expected_completion: '22 Oct 2026, 16:00',
+      status: 'In Progress' as const,
+      assigned_team: 'Bay 2 – Team Alpha',
+      assigned_bay: 'Bay 2 (Quick-Turn)',
+      assigned_tech: 'MWO R. Sharma',
+      opened_date: '20 Oct 2026, 09:15',
+      estimated_duration: '~ 48 hours',
+      delay_reason: 'Waiting for Hydraulic Pump (REQ-2045) from Central Depot (BRD).',
+      linked_requests: 'REQ-2045 (Hydraulic Pump)',
+      blocking_items: [
+        {
+          id: 'BLK-1',
+          name: 'Hydraulic Pump – In Transit',
+          status: 'In Transit',
+          link_tab: 'parts-materials',
+          link_id: 'REQ-2045',
+        },
+      ],
+      next_action: 'Confirm part receipt and start repair.',
+      image_url: '/tejas_hangar.jpg',
+      stages: [
+        {
+          step: 1,
+          name: 'Work Order Created',
+          code: 'WO_CREATED' as const,
+          status: 'completed' as const,
+          actual_time: '20 Oct 09:15',
+          responsible: 'Sqn Ldr. K. Verma (45 Sqn)',
+          notes: 'Work order initialized following post-sortie telemetry check.',
+        },
+        {
+          step: 2,
+          name: 'Aircraft Received',
+          code: 'AIRCRAFT_RECEIVED' as const,
+          status: 'completed' as const,
+          actual_time: '20 Oct 11:30',
+          responsible: 'Hangar Line Crew',
+          notes: 'Towed to Bay 2 and grounded on jack stands.',
+        },
+        {
+          step: 3,
+          name: 'Inspection & Diagnosis',
+          code: 'INSPECTION_DIAGNOSIS' as const,
+          status: 'completed' as const,
+          actual_time: '20 Oct 14:00',
+          responsible: 'MWO R. Sharma (Hydraulics Lead)',
+          notes: 'Port main gear actuator seals cracked; pressure drop verified.',
+        },
+        {
+          step: 4,
+          name: 'Awaiting Part (REQ-2045)',
+          code: 'AWAITING_PARTS' as const,
+          status: 'blocked' as const,
+          expected_time: 'ETA: 21 Oct 10:00',
+          responsible: 'Logistics Dispatch BRD Sulur',
+          blocker_detail: 'Hydraulic Pump HYD-5562 in transit via C-130J flight IL-402.',
+        },
+        {
+          step: 5,
+          name: 'Repair & Testing',
+          code: 'REPAIR_TESTING' as const,
+          status: 'upcoming' as const,
+          expected_time: 'Planned: 21 Oct – 22 Oct',
+          responsible: 'Team Alpha',
+          notes: 'Actuator replacement and 3000 PSI pressure cycling test.',
+        },
+        {
+          step: 6,
+          name: 'Inspection & Sign-off',
+          code: 'INSPECTION_SIGNOFF' as const,
+          status: 'upcoming' as const,
+          expected_time: 'Target: 22 Oct 16:00',
+          responsible: 'Quality Assurance Inspector',
+          notes: 'Independent multi-point quality check and leak containment verification.',
+        },
+        {
+          step: 7,
+          name: 'Return to Service',
+          code: 'RETURN_TO_SERVICE' as const,
+          status: 'upcoming' as const,
+          expected_time: 'Pending',
+          responsible: 'Chief Engineering Officer',
+          notes: 'Final sortie clearance gate approval.',
+        },
+      ],
+      required_parts: [
+        {
+          part_number: 'HYD-5562',
+          part_name: 'Hydraulic Pump',
+          required_qty: 1,
+          received_qty: 0,
+          status: 'In Transit' as const,
+          image_url: '/spares/hydraulic_pump.png',
+          linked_request_id: 'REQ-2045',
+        },
+        {
+          part_number: 'BRK-9812',
+          part_name: 'Seal Kit',
+          required_qty: 2,
+          received_qty: 2,
+          status: 'Received' as const,
+          image_url: '/spares/brake_disc.png',
+          linked_request_id: 'REQ-2042',
+        },
+        {
+          part_number: 'FIT-4431',
+          part_name: 'Mounting Bracket',
+          required_qty: 1,
+          received_qty: 0,
+          status: 'Awaiting' as const,
+          image_url: '/spares/fcs_actuator.png',
+          linked_request_id: 'REQ-2049',
+        },
+      ],
+      related_documents: [
+        {
+          id: 'DOC-1042-WO',
+          title: 'Work Order (WO-1042)',
+          file_type: 'PDF',
+          file_size: '450 KB',
+          download_url: '#',
+          linked_ref: 'WO-1042',
+        },
+        {
+          id: 'DOC-1042-INSP',
+          title: 'Inspection Report (Initial)',
+          file_type: 'PDF',
+          file_size: '320 KB',
+          download_url: '#',
+          linked_ref: 'REC-2026-1042',
+        },
+        {
+          id: 'DOC-1042-DIAG',
+          title: 'Diagnostic Notes',
+          file_type: 'PDF',
+          file_size: '280 KB',
+          download_url: '#',
+          linked_ref: 'DIAG-5501',
+        },
+        {
+          id: 'DOC-1042-LOG',
+          title: 'Linked Logistics Request',
+          file_type: 'LOG',
+          file_size: 'REQ-2045',
+          download_url: '#',
+          linked_ref: 'REQ-2045',
+        },
+      ],
+      activity_log: [
+        {
+          id: 'ACT-4',
+          title: 'Part dispatched from Central Depot',
+          timestamp: '21 Oct 2026, 08:45',
+          actor: 'Central Depot (BRD)',
+          icon_type: 'dispatch' as const,
+          notes: 'HYD-5562 loaded onto flight IL-402 with priority manifest.',
+        },
+        {
+          id: 'ACT-3',
+          title: 'Inspection completed',
+          timestamp: '20 Oct 2026, 14:00',
+          actor: 'MWO R. Sharma',
+          icon_type: 'inspection' as const,
+          notes: 'Failure localized to return valve seal ring.',
+        },
+        {
+          id: 'ACT-2',
+          title: 'Aircraft received by agency',
+          timestamp: '20 Oct 2026, 11:30',
+          actor: 'Line Crew (Bay 2)',
+          icon_type: 'received' as const,
+          notes: 'Safe grounding certificate signed.',
+        },
+        {
+          id: 'ACT-1',
+          title: 'Work order created',
+          timestamp: '20 Oct 2026, 09:15',
+          actor: 'Sqn Ldr. K. Verma',
+          icon_type: 'created' as const,
+          notes: 'Priority High assigned based on mission schedule.',
+        },
+      ],
+      base_id: 'afs-ambala',
+    },
+    {
+      id: 'WO-1038',
+      aircraft: 'Rafale RB-01',
+      aircraft_model: 'Rafale EH',
+      issue: 'Engine Sensor Replacement',
+      priority: 'High' as const,
+      current_stage: 'Repair & Testing',
+      stage_index: 5,
+      eta: '20 Oct 2026',
+      expected_completion: '20 Oct 2026, 18:00',
+      status: 'In Progress' as const,
+      assigned_team: 'Bay 1 – Team Bravo',
+      assigned_bay: 'Bay 1 (Depot)',
+      assigned_tech: 'Sgt. V. Nair',
+      opened_date: '18 Oct 2026, 10:00',
+      estimated_duration: '~ 36 hours',
+      linked_requests: 'REQ-2038 (EGT Sensor)',
+      blocking_items: [],
+      next_action: 'Execute turbine temperature sensor harness calibration.',
+      image_url: '/tejas_hangar.jpg',
+      stages: [
+        { step: 1, name: 'Work Order Created', code: 'WO_CREATED' as const, status: 'completed' as const, actual_time: '18 Oct 10:00', responsible: 'Wg Cdr. Roy' },
+        { step: 2, name: 'Aircraft Received', code: 'AIRCRAFT_RECEIVED' as const, status: 'completed' as const, actual_time: '18 Oct 12:00', responsible: 'Bay 1 Crew' },
+        { step: 3, name: 'Inspection & Diagnosis', code: 'INSPECTION_DIAGNOSIS' as const, status: 'completed' as const, actual_time: '18 Oct 15:30', responsible: 'Sgt. V. Nair' },
+        { step: 4, name: 'Awaiting Part', code: 'AWAITING_PARTS' as const, status: 'completed' as const, actual_time: '19 Oct 09:00', responsible: 'AFS Ambala Stores' },
+        { step: 5, name: 'Repair & Testing', code: 'REPAIR_TESTING' as const, status: 'active' as const, expected_time: '20 Oct 18:00', responsible: 'Team Bravo' },
+        { step: 6, name: 'Inspection & Sign-off', code: 'INSPECTION_SIGNOFF' as const, status: 'upcoming' as const, expected_time: 'Target: 21 Oct 10:00', responsible: 'QA Inspector' },
+        { step: 7, name: 'Return to Service', code: 'RETURN_TO_SERVICE' as const, status: 'upcoming' as const, expected_time: 'Pending', responsible: 'Base Engineering Officer' },
+      ],
+      required_parts: [
+        { part_number: 'ENG-774A', part_name: 'Engine Control Unit', required_qty: 1, received_qty: 1, status: 'Received' as const, image_url: '/spares/ecu_774a.png' },
+      ],
+      related_documents: [
+        { id: 'DOC-1038', title: 'Engine Diagnostics Log', file_type: 'PDF', file_size: '410 KB', linked_ref: 'WO-1038' },
+      ],
+      activity_log: [
+        { id: 'ACT-1038-1', title: 'ECU replacement received from stores', timestamp: '19 Oct 2026, 09:00', actor: 'Logistics Depot', icon_type: 'received' as const },
+      ],
+      base_id: 'afs-ambala',
+    },
+    {
+      id: 'WO-1031',
+      aircraft: 'Tejas T-12',
+      aircraft_model: 'Tejas Mk1',
+      issue: 'Avionics Module Repair',
+      priority: 'Medium' as const,
+      current_stage: 'Inspection',
+      stage_index: 6,
+      eta: '19 Oct 2026',
+      expected_completion: '19 Oct 2026, 17:30',
+      status: 'Inspection' as const,
+      assigned_team: 'Bay 3 – Avionics Lab',
+      assigned_bay: 'Bay 3 (Avionics Clean Bay)',
+      assigned_tech: 'Cpl. A. Sen',
+      opened_date: '16 Oct 2026, 14:20',
+      estimated_duration: '~ 24 hours',
+      linked_requests: 'REQ-2031 (Avionics Bus LRU)',
+      blocking_items: [],
+      next_action: 'Complete final mil-bus diagnostic sign-off.',
+      image_url: '/tejas_hangar.jpg',
+      stages: [
+        { step: 1, name: 'Work Order Created', code: 'WO_CREATED' as const, status: 'completed' as const, actual_time: '16 Oct 14:20', responsible: 'Sqn Ldr. Verma' },
+        { step: 2, name: 'Aircraft Received', code: 'AIRCRAFT_RECEIVED' as const, status: 'completed' as const, actual_time: '16 Oct 16:00', responsible: 'Bay 3 Techs' },
+        { step: 3, name: 'Inspection & Diagnosis', code: 'INSPECTION_DIAGNOSIS' as const, status: 'completed' as const, actual_time: '17 Oct 10:00', responsible: 'Cpl. A. Sen' },
+        { step: 4, name: 'Awaiting Part', code: 'AWAITING_PARTS' as const, status: 'completed' as const, actual_time: '18 Oct 11:00', responsible: 'Central Depot' },
+        { step: 5, name: 'Repair & Testing', code: 'REPAIR_TESTING' as const, status: 'completed' as const, actual_time: '19 Oct 13:00', responsible: 'Cpl. A. Sen' },
+        { step: 6, name: 'Inspection & Sign-off', code: 'INSPECTION_SIGNOFF' as const, status: 'active' as const, expected_time: '19 Oct 17:30', responsible: 'Flt Lt. Nair' },
+        { step: 7, name: 'Return to Service', code: 'RETURN_TO_SERVICE' as const, status: 'upcoming' as const, expected_time: 'Target: 20 Oct', responsible: 'Engineering Officer' },
+      ],
+      required_parts: [
+        { part_number: 'AV-5510', part_name: 'Avionics Module', required_qty: 1, received_qty: 1, status: 'Received' as const, image_url: '/spares/avionics_module.png' },
+      ],
+      related_documents: [
+        { id: 'DOC-1031', title: 'Mil-STD-1553 Bus Verification', file_type: 'PDF', file_size: '290 KB', linked_ref: 'WO-1031' },
+      ],
+      activity_log: [
+        { id: 'ACT-1031-1', title: 'Inspection checklist initiated', timestamp: '19 Oct 2026, 14:00', actor: 'Flt Lt. Nair', icon_type: 'inspection' as const },
+      ],
+      base_id: 'afs-ambala',
+    },
+    {
+      id: 'WO-1027',
+      aircraft: 'Su-30MKI S-03',
+      aircraft_model: 'Su-30MKI Flanker',
+      issue: 'Brake System Overhaul',
+      priority: 'High' as const,
+      current_stage: 'Completed',
+      stage_index: 7,
+      eta: '17 Oct 2026',
+      expected_completion: '17 Oct 2026, 15:00',
+      status: 'Completed' as const,
+      assigned_team: 'Bay 1 – Team Bravo',
+      assigned_bay: 'Bay 1 (Depot)',
+      assigned_tech: 'Sgt. K. Pillai',
+      opened_date: '14 Oct 2026, 08:30',
+      estimated_duration: '~ 30 hours',
+      linked_requests: 'REQ-2027 (Carbon Brake Pack)',
+      blocking_items: [],
+      next_action: 'Sortie gate released; log verified in Technical Records.',
+      image_url: '/tejas_hangar.jpg',
+      stages: [
+        { step: 1, name: 'Work Order Created', code: 'WO_CREATED' as const, status: 'completed' as const, actual_time: '14 Oct 08:30', responsible: 'Line Engineering' },
+        { step: 2, name: 'Aircraft Received', code: 'AIRCRAFT_RECEIVED' as const, status: 'completed' as const, actual_time: '14 Oct 10:00', responsible: 'Bay 1 Crew' },
+        { step: 3, name: 'Inspection & Diagnosis', code: 'INSPECTION_DIAGNOSIS' as const, status: 'completed' as const, actual_time: '14 Oct 14:00', responsible: 'Sgt. K. Pillai' },
+        { step: 4, name: 'Awaiting Part', code: 'AWAITING_PARTS' as const, status: 'completed' as const, actual_time: '15 Oct 11:00', responsible: 'ASP Chandigarh' },
+        { step: 5, name: 'Repair & Testing', code: 'REPAIR_TESTING' as const, status: 'completed' as const, actual_time: '16 Oct 16:00', responsible: 'Team Bravo' },
+        { step: 6, name: 'Inspection & Sign-off', code: 'INSPECTION_SIGNOFF' as const, status: 'completed' as const, actual_time: '17 Oct 12:00', responsible: 'Quality Officer' },
+        { step: 7, name: 'Return to Service', code: 'RETURN_TO_SERVICE' as const, status: 'completed' as const, actual_time: '17 Oct 15:00', responsible: 'Air Commodore Sen' },
+      ],
+      required_parts: [
+        { part_number: 'BRK-9087', part_name: 'Brake Disc', required_qty: 2, received_qty: 2, status: 'Received' as const, image_url: '/spares/brake_disc.png' },
+      ],
+      related_documents: [
+        { id: 'DOC-1027', title: 'Brake System Sign-Off Certificate', file_type: 'PDF', file_size: '520 KB', linked_ref: 'WO-1027' },
+      ],
+      activity_log: [
+        { id: 'ACT-1027-1', title: 'Returned to operational service', timestamp: '17 Oct 2026, 15:00', actor: 'Air Commodore Sen', icon_type: 'signoff' as const },
+      ],
+      base_id: 'asp-chandigarh',
+    },
+    {
+      id: 'WO-1025',
+      aircraft: 'Rafale RB-04',
+      aircraft_model: 'Rafale EH',
+      issue: 'Fuel Pump Replacement',
+      priority: 'Medium' as const,
+      current_stage: 'Awaiting Parts',
+      stage_index: 4,
+      eta: '24 Oct 2026',
+      expected_completion: '24 Oct 2026, 14:00',
+      status: 'In Progress' as const,
+      assigned_team: 'Bay 4 – Propulsion',
+      assigned_bay: 'Bay 4 (Engine Test Cell)',
+      assigned_tech: 'JWO M. Gupta',
+      opened_date: '19 Oct 2026, 11:45',
+      estimated_duration: '~ 40 hours',
+      delay_reason: 'Low pressure fuel booster pump in transit from HAL Nashik.',
+      linked_requests: 'REQ-2025 (Fuel Pump Unit)',
+      blocking_items: [
+        { id: 'BLK-2', name: 'Fuel Booster Pump – In Transit', status: 'In Transit', link_tab: 'parts-materials', link_id: 'REQ-2025' },
+      ],
+      next_action: 'Await fuel booster pump delivery and stage calibration rig.',
+      image_url: '/tejas_hangar.jpg',
+      stages: [
+        { step: 1, name: 'Work Order Created', code: 'WO_CREATED' as const, status: 'completed' as const, actual_time: '19 Oct 11:45', responsible: 'Sqn Ldr. A. Sharma' },
+        { step: 2, name: 'Aircraft Received', code: 'AIRCRAFT_RECEIVED' as const, status: 'completed' as const, actual_time: '19 Oct 13:30', responsible: 'Bay 4 Crew' },
+        { step: 3, name: 'Inspection & Diagnosis', code: 'INSPECTION_DIAGNOSIS' as const, status: 'completed' as const, actual_time: '19 Oct 16:00', responsible: 'JWO M. Gupta' },
+        { step: 4, name: 'Awaiting Part', code: 'AWAITING_PARTS' as const, status: 'blocked' as const, expected_time: 'ETA: 22 Oct 11:00', responsible: 'HAL Nashik Depot', blocker_detail: 'Inter-base freight booked.' },
+        { step: 5, name: 'Repair & Testing', code: 'REPAIR_TESTING' as const, status: 'upcoming' as const, expected_time: 'Planned: 22 Oct – 23 Oct', responsible: 'Propulsion Team' },
+        { step: 6, name: 'Inspection & Sign-off', code: 'INSPECTION_SIGNOFF' as const, status: 'upcoming' as const, expected_time: 'Target: 24 Oct 10:00', responsible: 'QA Officer' },
+        { step: 7, name: 'Return to Service', code: 'RETURN_TO_SERVICE' as const, status: 'upcoming' as const, expected_time: 'Pending', responsible: 'Engineering Officer' },
+      ],
+      required_parts: [
+        { part_number: 'HYD-2209', part_name: 'Fuel Pump Unit', required_qty: 1, received_qty: 0, status: 'In Transit' as const, image_url: '/spares/hydraulic_pump.png', linked_request_id: 'REQ-2025' },
+      ],
+      related_documents: [
+        { id: 'DOC-1025', title: 'Fuel System Flow Diagnostics', file_type: 'PDF', file_size: '340 KB', linked_ref: 'WO-1025' },
+      ],
+      activity_log: [
+        { id: 'ACT-1025-1', title: 'Requisition submitted to HAL Nashik', timestamp: '19 Oct 2026, 17:00', actor: 'Logistics Liaison', icon_type: 'dispatch' as const },
+      ],
+      base_id: 'afs-ambala',
+    },
+  ] as MaintenanceWorkOrderItem[],
+
+  _inMemoryTechniciansRoster: [
+    {
+      id: 'tech-01',
+      name: 'MWO R. Sharma',
+      badge_number: 'IAF-ENG-4401',
+      trade: 'Hydraulics & Flight Controls',
+      qualifications: ['Tejas Mk1A Master Cert', 'High-Pressure Hydraulics', 'NDT Level II'],
+      shift: 'Shift Alpha (06:00 - 14:00)',
+      status: 'On Job' as const,
+      assigned_work_order: 'WO-1042',
+      assigned_aircraft: 'Tejas T-04',
+      base_id: 'afs-ambala',
+      experience_years: 16,
+    },
+    {
+      id: 'tech-02',
+      name: 'Sgt. V. Nair',
+      badge_number: 'IAF-ENG-5112',
+      trade: 'Propulsion & Turbofans',
+      qualifications: ['Snecma M88 Engine Cert', 'AL-31FP Gas Turbine Lead'],
+      shift: 'Shift Alpha (06:00 - 14:00)',
+      status: 'On Job' as const,
+      assigned_work_order: 'WO-1038',
+      assigned_aircraft: 'Rafale RB-01',
+      base_id: 'afs-ambala',
+      experience_years: 12,
+    },
+    {
+      id: 'tech-03',
+      name: 'Cpl. A. Sen',
+      badge_number: 'IAF-ENG-6204',
+      trade: 'Avionics & Radar EW',
+      qualifications: ['Mil-STD-1553 Bus Specialist', 'AESA Radar Alignment'],
+      shift: 'Shift Bravo (14:00 - 22:00)',
+      status: 'On Job' as const,
+      assigned_work_order: 'WO-1031',
+      assigned_aircraft: 'Tejas T-12',
+      base_id: 'afs-ambala',
+      experience_years: 7,
+    },
+    {
+      id: 'tech-04',
+      name: 'JWO M. Gupta',
+      badge_number: 'IAF-ENG-4980',
+      trade: 'Airframe & Composites',
+      qualifications: ['Carbon Composite Autoclave Repair', 'Titanium Structural Welder'],
+      shift: 'Shift Bravo (14:00 - 22:00)',
+      status: 'On Job' as const,
+      assigned_work_order: 'WO-1025',
+      assigned_aircraft: 'Rafale RB-04',
+      base_id: 'afs-ambala',
+      experience_years: 14,
+    },
+    {
+      id: 'tech-05',
+      name: 'Sgt. K. Pillai',
+      badge_number: 'IAF-ENG-5430',
+      trade: 'Mechanical & Undercarriage',
+      qualifications: ['Heavy Landing Gear Overhaul', 'Pneumatic Brakes Lead'],
+      shift: 'Shift Charlie (22:00 - 06:00)',
+      status: 'Available' as const,
+      base_id: 'asp-chandigarh',
+      experience_years: 11,
+    },
+    {
+      id: 'tech-06',
+      name: 'Cpl. D. Ghosh',
+      badge_number: 'IAF-ENG-7102',
+      trade: 'Electrical & Power Systems',
+      qualifications: ['Starter-Generator Overhaul', 'Lithium Battery Safety'],
+      shift: 'Shift Alpha (06:00 - 14:00)',
+      status: 'Available' as const,
+      base_id: 'afs-ambala',
+      experience_years: 5,
+    },
+  ] as TechnicianRosterItem[],
+
+  _inMemoryHangarBaysStatus: [
+    {
+      id: 'bay-01',
+      name: 'Bay 1 (Depot)',
+      bay_type: 'Heavy Depot Bay',
+      status: 'Occupied' as const,
+      occupied_by: 'Rafale RB-01',
+      active_job: 'Engine Sensor Replacement (WO-1038)',
+      estimated_free_time: 'Today, 18:00',
+      compatible_aircraft: ['Rafale EH', 'Su-30MKI', 'Tejas Mk1A'],
+      base_id: 'afs-ambala',
+      environmental_control: true,
+    },
+    {
+      id: 'bay-02',
+      name: 'Bay 2 (Quick-Turn)',
+      bay_type: 'Quick-Turn Maintenance Bay',
+      status: 'Occupied' as const,
+      occupied_by: 'Tejas T-04',
+      active_job: 'Landing Gear – Hydraulic Leak (WO-1042)',
+      estimated_free_time: '22 Oct 2026, 16:00',
+      compatible_aircraft: ['Tejas Mk1', 'Tejas Mk1A', 'Mirage 2000'],
+      base_id: 'afs-ambala',
+      environmental_control: true,
+    },
+    {
+      id: 'bay-03',
+      name: 'Bay 3 (Avionics Clean Bay)',
+      bay_type: 'Class 10,000 Clean Room Bay',
+      status: 'Occupied' as const,
+      occupied_by: 'Tejas T-12',
+      active_job: 'Avionics Module Repair (WO-1031)',
+      estimated_free_time: 'Today, 17:30',
+      compatible_aircraft: ['Tejas Mk1A', 'Rafale EH', 'Su-30MKI'],
+      base_id: 'afs-ambala',
+      environmental_control: true,
+    },
+    {
+      id: 'bay-04',
+      name: 'Bay 4 (Engine Test Cell)',
+      bay_type: 'Acoustic Test Cell',
+      status: 'Occupied' as const,
+      occupied_by: 'Rafale RB-04',
+      active_job: 'Fuel Pump Replacement (WO-1025)',
+      estimated_free_time: '24 Oct 2026, 14:00',
+      compatible_aircraft: ['Rafale EH', 'Su-30MKI'],
+      base_id: 'afs-ambala',
+      environmental_control: true,
+    },
+    {
+      id: 'bay-05',
+      name: 'Bay 5 (Composite Bay)',
+      bay_type: 'Composite Repair Facility',
+      status: 'Available' as const,
+      estimated_free_time: 'Available Now',
+      compatible_aircraft: ['Tejas Mk1A', 'Rafale EH'],
+      base_id: 'afs-ambala',
+      environmental_control: true,
+    },
+    {
+      id: 'bay-06',
+      name: 'Bay 6 (Inspection Gate)',
+      bay_type: 'Flight Clearance & Release Gate',
+      status: 'Available' as const,
+      estimated_free_time: 'Available Now',
+      compatible_aircraft: ['All IAF Types'],
+      base_id: 'afs-ambala',
+      environmental_control: false,
+    },
+  ] as HangarBayStatusItem[],
+
+  getMaintenanceKpis(): MaintenanceKpiSummary {
+    const list = this._inMemoryMaintenanceWorkOrders;
+    return {
+      assigned_work_orders: 12,
+      assigned_delta: '+2 Under Maintenance',
+      in_progress: list.filter((w) => w.status === 'In Progress').length || 6,
+      awaiting_parts: list.filter((w) => w.current_stage.includes('Awaiting') || w.status === 'Awaiting Parts').length || 3,
+      ready_for_inspection: list.filter((w) => w.status === 'Inspection' || w.stage_index === 6).length || 2,
+      overdue: 1,
+      is_demo_data: true,
+    };
+  },
+
+  getMaintenanceWorkOrders(params?: { status?: string; priority?: string; search?: string }): MaintenanceWorkOrderItem[] {
+    let list = [...this._inMemoryMaintenanceWorkOrders];
+    if (params?.status && params.status !== 'All' && params.status !== 'all') {
+      const s = params.status.toLowerCase();
+      if (s === 'in progress') list = list.filter((w) => w.status === 'In Progress');
+      else if (s === 'awaiting parts') list = list.filter((w) => w.current_stage.toLowerCase().includes('awaiting'));
+      else if (s === 'inspection') list = list.filter((w) => w.status === 'Inspection');
+      else if (s === 'completed') list = list.filter((w) => w.status === 'Completed');
+    }
+    if (params?.priority && params.priority !== 'All' && params.priority !== 'all') {
+      list = list.filter((w) => w.priority.toLowerCase() === params.priority!.toLowerCase());
+    }
+    if (params?.search && params.search.trim()) {
+      const q = params.search.toLowerCase();
+      list = list.filter(
+        (w) =>
+          w.id.toLowerCase().includes(q) ||
+          w.aircraft.toLowerCase().includes(q) ||
+          w.aircraft_model.toLowerCase().includes(q) ||
+          w.issue.toLowerCase().includes(q) ||
+          w.assigned_team.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  },
+
+  getMaintenanceWorkOrderDetail(woId: string): MaintenanceWorkOrderItem {
+    const item = this._inMemoryMaintenanceWorkOrders.find((w) => w.id === woId);
+    return item || this._inMemoryMaintenanceWorkOrders[0];
+  },
+
+  updateMaintenanceStage(woId: string, req: UpdateStageRequest): MaintenanceWorkOrderItem {
+    const wo = this._inMemoryMaintenanceWorkOrders.find((w) => w.id === woId);
+    if (wo) {
+      wo.stage_index = req.target_stage_index;
+      wo.current_stage = req.stage_name;
+      wo.stages = wo.stages.map((s) => {
+        if (s.step < req.target_stage_index) return { ...s, status: 'completed' as const };
+        if (s.step === req.target_stage_index) {
+          return {
+            ...s,
+            status: 'active' as const,
+            actual_time: req.actual_time || s.actual_time,
+            responsible: req.responsible_person || s.responsible,
+            notes: req.notes || s.notes,
+          };
+        }
+        return { ...s, status: 'upcoming' as const };
+      });
+      if (req.target_stage_index === 7) wo.status = 'Completed';
+      else if (req.target_stage_index === 6) wo.status = 'Inspection';
+      else wo.status = 'In Progress';
+
+      wo.activity_log.unshift({
+        id: `ACT-${Date.now()}`,
+        title: `Stage advanced to ${req.stage_name}`,
+        timestamp: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        actor: req.responsible_person || 'MWO R. Sharma',
+        icon_type: 'update',
+        notes: req.notes || `Progressed to Step ${req.target_stage_index}`,
+      });
+    }
+    return wo || this._inMemoryMaintenanceWorkOrders[0];
+  },
+
+  confirmMaintenancePartReceipt(woId: string, req: ConfirmPartReceiptRequest): MaintenanceWorkOrderItem {
+    const wo = this._inMemoryMaintenanceWorkOrders.find((w) => w.id === woId);
+    if (wo) {
+      const part = wo.required_parts.find((p) => p.part_number === req.part_number);
+      if (part) {
+        part.received_qty += req.quantity_received;
+        if (part.received_qty >= part.required_qty) part.status = 'Received';
+      }
+      if (wo.required_parts.every((p) => p.received_qty >= p.required_qty)) {
+        wo.blocking_items = [];
+        wo.delay_reason = undefined;
+        if (wo.stage_index === 4) {
+          wo.stage_index = 5;
+          wo.current_stage = 'Repair & Testing';
+        }
+      }
+      wo.activity_log.unshift({
+        id: `ACT-${Date.now()}`,
+        title: `Part received: ${req.part_number} (Qty: ${req.quantity_received})`,
+        timestamp: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        actor: req.received_by || 'MWO R. Sharma',
+        icon_type: 'received',
+        notes: req.notes || 'Part receipt confirmed and slotted into tool bay.',
+      });
+    }
+    return wo || this._inMemoryMaintenanceWorkOrders[0];
+  },
+
+  recordMaintenanceInspectionSignOff(woId: string, req: InspectionSignOffRequest): MaintenanceWorkOrderItem {
+    const wo = this._inMemoryMaintenanceWorkOrders.find((w) => w.id === woId);
+    if (wo) {
+      if (req.result === 'PASSED' && req.authorize_release) {
+        wo.current_stage = 'Return to Service';
+        wo.stage_index = 7;
+        wo.status = 'Completed';
+        wo.next_action = 'Sortie flight clearance authorized and signed.';
+        wo.stages.forEach((s) => (s.status = 'completed'));
+      } else if (req.result === 'PASSED') {
+        wo.current_stage = 'Inspection & Sign-off';
+        wo.stage_index = 6;
+        wo.status = 'Inspection';
+        wo.next_action = 'Quality check passed; awaiting final commander release sign-off.';
+      } else {
+        wo.current_stage = 'Repair & Testing';
+        wo.stage_index = 5;
+        wo.status = 'In Progress';
+        wo.next_action = 'Quality inspection failed; re-work required by maintenance team.';
+      }
+
+      wo.activity_log.unshift({
+        id: `ACT-${Date.now()}`,
+        title: `Inspection sign-off: ${req.result}`,
+        timestamp: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        actor: `${req.inspector_name} (${req.inspector_service_id})`,
+        icon_type: 'signoff',
+        notes: req.sign_off_notes || `Inspection result: ${req.result}`,
+      });
+    }
+    return wo || this._inMemoryMaintenanceWorkOrders[0];
+  },
+
+  getMaintenanceTechnicians(): TechnicianRosterItem[] {
+    return this._inMemoryTechniciansRoster;
+  },
+
+  getMaintenanceBays(): HangarBayStatusItem[] {
+    return this._inMemoryHangarBaysStatus;
   },
 };
 

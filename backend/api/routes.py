@@ -66,6 +66,13 @@ from backend.schemas import (
     CreateProcurementOrderRequest,
     StockMovementItem,
     ReservePartRequest,
+    MaintenanceWorkOrderSchema,
+    MaintenanceKpiSchema,
+    UpdateStageRequestSchema,
+    InspectionSignOffRequestSchema,
+    ConfirmPartReceiptRequestSchema,
+    TechnicianRosterSchema,
+    HangarBayStatusSchema,
 )
 from backend.services.tech_records_service import (
     list_technical_records,
@@ -86,6 +93,16 @@ from backend.services.logistics_service import (
     list_procurement_orders,
     create_procurement_order,
     list_stock_movements,
+)
+from backend.services.maintenance_service import (
+    get_maintenance_kpis,
+    list_maintenance_work_orders,
+    get_maintenance_work_order_by_id,
+    update_work_order_stage,
+    confirm_part_receipt_in_work_order,
+    record_inspection_sign_off,
+    get_technicians_roster,
+    get_hangar_bays_status,
 )
 from backend.services.fleet_service import (
     get_all_bases,
@@ -951,4 +968,91 @@ def action_approval_commander(
         return execute_approval_action(approval_id, req, db)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# -------------------------------------------------------------
+# 10. Maintenance Control Centre
+# -------------------------------------------------------------
+@router.get("/maintenance/kpis", response_model=MaintenanceKpiSchema, tags=["Maintenance Control Centre"])
+def get_kpis_maintenance(db: Session = Depends(get_db)):
+    """Returns top-level KPIs for Maintenance Control Centre."""
+    return get_maintenance_kpis(db)
+
+
+@router.get("/maintenance/work-orders", response_model=List[MaintenanceWorkOrderSchema], tags=["Maintenance Control Centre"])
+def get_work_orders_maintenance(
+    status: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Lists maintenance work orders with full 7-stage workflow, required parts, documents, and activity history."""
+    return list_maintenance_work_orders(db, status_filter=status, priority_filter=priority, search_query=search)
+
+
+@router.get("/maintenance/work-orders/{wo_id}", response_model=MaintenanceWorkOrderSchema, tags=["Maintenance Control Centre"])
+def get_work_order_detail_maintenance(wo_id: str, db: Session = Depends(get_db)):
+    """Returns detailed information, active stage, and blockers for a specific maintenance work order."""
+    wo = get_maintenance_work_order_by_id(db, wo_id)
+    if not wo:
+        raise HTTPException(status_code=404, detail=f"Work Order {wo_id} not found.")
+    return wo
+
+
+@router.post("/maintenance/work-orders/{wo_id}/update-stage", response_model=MaintenanceWorkOrderSchema, tags=["Maintenance Control Centre"])
+def update_stage_maintenance(
+    wo_id: str,
+    req: UpdateStageRequestSchema,
+    db: Session = Depends(get_db),
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+):
+    """Advances or updates the workflow stage for a work order, recording the event in the Decision Ledger."""
+    verify_rbac_write_permission(x_airdoctor_role)
+    try:
+        return update_work_order_stage(db, req, actor_name=x_airdoctor_role or "MWO R. Sharma")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/maintenance/work-orders/{wo_id}/confirm-part-receipt", response_model=MaintenanceWorkOrderSchema, tags=["Maintenance Control Centre"])
+def confirm_part_receipt_maintenance(
+    wo_id: str,
+    req: ConfirmPartReceiptRequestSchema,
+    db: Session = Depends(get_db),
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+):
+    """Confirms receipt of in-transit parts, updates stock quantities, resolves blockers, and logs ledger."""
+    verify_rbac_write_permission(x_airdoctor_role)
+    try:
+        return confirm_part_receipt_in_work_order(db, req, actor_name=req.received_by or "Hangar Spares Custodian")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/maintenance/work-orders/{wo_id}/sign-off", response_model=MaintenanceWorkOrderSchema, tags=["Maintenance Control Centre"])
+def record_sign_off_maintenance(
+    wo_id: str,
+    req: InspectionSignOffRequestSchema,
+    db: Session = Depends(get_db),
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+):
+    """Records an authorized inspection sign-off and sortie release decision into the Decision Ledger."""
+    verify_rbac_write_permission(x_airdoctor_role)
+    try:
+        return record_inspection_sign_off(db, req)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/maintenance/technicians", response_model=List[TechnicianRosterSchema], tags=["Maintenance Control Centre"])
+def get_technicians_maintenance(db: Session = Depends(get_db)):
+    """Returns specialist technician roster with trade certifications, shifts, and active job assignments."""
+    return get_technicians_roster(db)
+
+
+@router.get("/maintenance/bays", response_model=List[HangarBayStatusSchema], tags=["Maintenance Control Centre"])
+def get_bays_maintenance(db: Session = Depends(get_db)):
+    """Returns hangar bay occupancy, environmental controls, and aircraft compatibility rules."""
+    return get_hangar_bays_status(db)
+
 

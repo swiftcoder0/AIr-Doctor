@@ -29,6 +29,8 @@ import {
   Calendar,
   Clock,
   ShoppingCart,
+  Users,
+  History,
 } from 'lucide-react';
 import { BaseId, UserRole } from '../../types/aircraft';
 import { baseList } from '../../data/aircraftData';
@@ -270,37 +272,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
-  // 5. Maintenance Agency Navigation (NO Command Center!)
+  // 5. Maintenance Control Centre Navigation (Matches Reference UI exactly)
   const maintenanceAgencyNavItems: SidebarNavItem[] = [
     {
       id: 'maintenance-agency',
-      label: 'Maintenance Agency',
+      label: 'Maintenance Overview',
       sublabel: 'Hangar floor control',
       icon: Wrench,
     },
     {
-      id: 'work-orders',
-      label: 'Work Orders',
+      id: 'assigned-work-orders',
+      label: 'Assigned Work Orders',
       sublabel: 'Active servicing queue',
       icon: ClipboardList,
+      badge: 12,
     },
     {
-      id: 'hangar-bays',
-      label: 'Hangar Bays',
-      sublabel: 'Bay occupancy & status',
+      id: 'repair-workflow',
+      label: 'Repair Workflow',
+      sublabel: '7-stage timeline progress',
+      icon: Activity,
+    },
+    {
+      id: 'technicians-bays',
+      label: 'Technicians & Bays',
+      sublabel: 'Shift rosters & hangar bays',
       icon: Warehouse,
     },
     {
-      id: 'rtf-schedule',
-      label: 'Ready-to-Fly Schedule',
-      sublabel: 'Sortie gate inspections',
-      icon: CalendarCheck,
+      id: 'parts-materials',
+      label: 'Parts & Materials',
+      sublabel: 'Spares & receipt gates',
+      icon: Package,
+      badge: 3,
     },
     {
-      id: 'reports-maintenance',
-      label: 'Maintenance Reports',
-      sublabel: 'Depot turnaround stats',
-      icon: BarChart2,
+      id: 'inspection-signoff',
+      label: 'Inspection & Sign-off',
+      sublabel: 'QA checks & sortie release',
+      icon: ClipboardCheck,
+      badge: 2,
+    },
+    {
+      id: 'documents-reports',
+      label: 'Documents & Reports',
+      sublabel: 'Technical sign-off docs',
+      icon: FileText,
+    },
+    {
+      id: 'activity-history',
+      label: 'Activity History',
+      sublabel: 'Decision ledger logs',
+      icon: History,
     },
   ];
 
@@ -478,6 +501,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <span className="text-slate-400 text-xs">•••</span>
             </div>
+          </div>
+        )}
+
+        {currentDepartmentId === 'maintenance-agency' && (
+          <div className="bg-[#0B1528]/95 border border-slate-700/80 rounded-2xl p-3 backdrop-blur-xs text-xs space-y-2 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Tejas Mk1A
+                </div>
+                <div className="text-sm font-black text-white">T-04</div>
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                IN MAINTENANCE
+              </span>
+            </div>
+
+            {/* Progress bar */}
+            <div>
+              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-emerald-500 h-1.5 rounded-full w-[60%]"></div>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-300">
+              <span className="text-slate-400 text-[10px] block uppercase font-bold">Current Issue</span>
+              <span className="font-semibold text-white">Landing Gear – Hydraulic Leak</span>
+            </div>
+
+            <button
+              onClick={() => onNavChange('maintenance-agency')}
+              className="w-full py-1.5 px-2.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-600/60 rounded-lg text-white font-bold text-[11px] flex items-center justify-between transition-colors cursor-pointer"
+            >
+              <span>View Aircraft</span>
+              <span>→</span>
+            </button>
           </div>
         )}
 

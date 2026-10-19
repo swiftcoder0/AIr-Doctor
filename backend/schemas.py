@@ -797,4 +797,150 @@ class ReservePartRequest(BaseModel):
     notes: Optional[str] = None
 
 
+# -------------------------------------------------------------
+# Maintenance Control Centre Schemas
+# -------------------------------------------------------------
+class MaintenanceStageSchema(BaseModel):
+    step: int
+    name: str
+    code: str
+    status: str # 'completed' | 'active' | 'blocked' | 'upcoming'
+    actual_time: Optional[str] = None
+    expected_time: Optional[str] = None
+    responsible: Optional[str] = None
+    notes: Optional[str] = None
+    blocker_detail: Optional[str] = None
+
+
+class MaintenancePartRequirementSchema(BaseModel):
+    part_number: str
+    part_name: str
+    required_qty: int
+    received_qty: int
+    status: str # 'In Transit' | 'Received' | 'Awaiting'
+    image_url: Optional[str] = None
+    linked_request_id: Optional[str] = None
+
+
+class MaintenanceDocumentSchema(BaseModel):
+    id: str
+    title: str
+    file_type: str
+    file_size: str
+    download_url: Optional[str] = None
+    linked_ref: Optional[str] = None
+
+
+class MaintenanceActivitySchema(BaseModel):
+    id: str
+    title: str
+    timestamp: str
+    actor: str
+    icon_type: str
+    notes: Optional[str] = None
+
+
+class MaintenanceBlockingItemSchema(BaseModel):
+    id: str
+    name: str
+    status: str
+    link_tab: Optional[str] = None
+    link_id: Optional[str] = None
+
+
+class MaintenanceWorkOrderSchema(BaseModel):
+    id: str
+    aircraft: str
+    aircraft_model: str
+    issue: str
+    priority: str
+    current_stage: str
+    stage_index: int
+    eta: str
+    expected_completion: str
+    status: str
+    assigned_team: str
+    assigned_bay: str
+    assigned_tech: str
+    opened_date: str
+    estimated_duration: str
+    delay_reason: Optional[str] = None
+    linked_requests: Optional[str] = None
+    blocking_items: List[MaintenanceBlockingItemSchema] = []
+    next_action: str
+    image_url: Optional[str] = "/tejas_hangar.jpg"
+    stages: List[MaintenanceStageSchema] = []
+    required_parts: List[MaintenancePartRequirementSchema] = []
+    related_documents: List[MaintenanceDocumentSchema] = []
+    activity_log: List[MaintenanceActivitySchema] = []
+    base_id: str
+
+
+class MaintenanceKpiSchema(BaseModel):
+    assigned_work_orders: int
+    assigned_delta: str
+    in_progress: int
+    awaiting_parts: int
+    ready_for_inspection: int
+    overdue: int
+    is_demo_data: bool = True
+
+
+class UpdateStageRequestSchema(BaseModel):
+    work_order_id: str
+    target_stage_index: int
+    stage_name: str
+    notes: Optional[str] = None
+    responsible_person: Optional[str] = None
+    actual_time: Optional[str] = None
+    expected_time: Optional[str] = None
+
+
+class InspectionSignOffRequestSchema(BaseModel):
+    work_order_id: str
+    inspector_name: str
+    inspector_service_id: str
+    result: str # 'PASSED' | 'FAILED'
+    checklist_items: List[Dict[str, Any]] = []
+    sign_off_notes: str = ""
+    authorize_release: bool = False
+
+
+class ConfirmPartReceiptRequestSchema(BaseModel):
+    work_order_id: str
+    part_number: str
+    quantity_received: int
+    received_by: str
+    storage_location: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class TechnicianRosterSchema(BaseModel):
+    id: str
+    name: str
+    badge_number: str
+    trade: str
+    qualifications: List[str]
+    shift: str
+    status: str
+    assigned_work_order: Optional[str] = None
+    assigned_aircraft: Optional[str] = None
+    base_id: str
+    experience_years: int
+
+
+class HangarBayStatusSchema(BaseModel):
+    id: str
+    name: str
+    bay_type: str
+    status: str
+    occupied_by: Optional[str] = None
+    active_job: Optional[str] = None
+    estimated_free_time: str
+    compatible_aircraft: List[str]
+    base_id: str
+    environmental_control: bool
+
+
+
 

@@ -16,6 +16,7 @@ import { CommandApprovalsView } from './components/CommandCenter/CommandApproval
 import { StrategicInsightsView } from './components/CommandCenter/StrategicInsightsView';
 import { TechRecordsView } from './components/TechRecords/TechRecordsView';
 import { LogisticsDashboardView } from './components/Logistics/LogisticsDashboardView';
+import { MaintenanceControlCentreView } from './components/Maintenance/MaintenanceControlCentreView';
 import { DepartmentSetupWorkspaceView } from './components/DepartmentWorkspace/DepartmentSetupWorkspaceView';
 import { AccessRestrictedView } from './components/Security/AccessRestrictedView';
 import { BaseId, AircraftData, UserRole, VerifyDepartmentTotpResponse } from './types/aircraft';
@@ -119,11 +120,19 @@ export const DEPARTMENT_ALLOWED_ROUTES: Record<string, string[]> = {
   ],
   'maintenance-agency': [
     'maintenance-agency',
+    'maintenance-overview',
+    'assigned-work-orders',
     'work-orders',
-    'maintenance-scheduler',
+    'repair-workflow',
+    'technicians-bays',
     'hangar-bays',
+    'parts-materials',
+    'inspection-signoff',
     'rtf-schedule',
+    'documents-reports',
     'reports-maintenance',
+    'activity-history',
+    'maintenance-scheduler',
     'reports',
     'reports-analytics',
     'ai-assistant',
@@ -448,11 +457,27 @@ export function App() {
                 />
               )}
 
-              {/* Department Setup Workspace for Maintenance Agency */}
-              {activeNav === 'maintenance-agency' && (
-                <DepartmentSetupWorkspaceView
-                  departmentId="maintenance-agency"
+              {/* PAGE 5: Maintenance Control Centre Workspace */}
+              {(activeNav === 'maintenance-agency' ||
+                activeNav === 'maintenance-overview' ||
+                activeNav === 'assigned-work-orders' ||
+                activeNav === 'repair-workflow' ||
+                activeNav === 'technicians-bays' ||
+                activeNav === 'parts-materials' ||
+                activeNav === 'inspection-signoff' ||
+                activeNav === 'documents-reports' ||
+                activeNav === 'activity-history' ||
+                (authSession.departmentId === 'maintenance-agency' &&
+                  (activeNav === 'work-orders' ||
+                    activeNav === 'hangar-bays' ||
+                    activeNav === 'rtf-schedule' ||
+                    activeNav === 'reports-maintenance'))) && (
+                <MaintenanceControlCentreView
+                  activeNav={activeNav}
                   onNavigate={handleNavChange}
+                  onLogDecision={handleLogDecisionCallback}
+                  currentRole={currentRole}
+                  selectedBaseId={selectedBaseId}
                 />
               )}
 
@@ -483,17 +508,18 @@ export function App() {
                 />
               )}
 
-              {/* Maintenance Agency Tools: Work Orders, Hangar Bays, RTF Schedule */}
-              {(activeNav === 'work-orders' ||
-                activeNav === 'maintenance-scheduler' ||
-                activeNav === 'hangar-bays' ||
-                activeNav === 'rtf-schedule') && (
-                <WorkOrdersView
-                  selectedBaseId={selectedBaseId}
-                  onSelectBase={handleSelectBase}
-                  onLogDecision={handleLogDecisionCallback}
-                />
-              )}
+              {/* Legacy Work Orders View (for non-maintenance departments) */}
+              {authSession.departmentId !== 'maintenance-agency' &&
+                (activeNav === 'work-orders' ||
+                  activeNav === 'maintenance-scheduler' ||
+                  activeNav === 'hangar-bays' ||
+                  activeNav === 'rtf-schedule') && (
+                  <WorkOrdersView
+                    selectedBaseId={selectedBaseId}
+                    onSelectBase={handleSelectBase}
+                    onLogDecision={handleLogDecisionCallback}
+                  />
+                )}
 
               {/* Dedicated AI Assistant */}
               {activeNav === 'ai-assistant' && (
