@@ -461,4 +461,111 @@ export const DEPARTMENT_PROFILES: DepartmentProfile[] = [
   },
 ];
 
+// -------------------------------------------------------------
+// Commander Command Center Types
+// -------------------------------------------------------------
+export type AirbaseCommand = 'Western' | 'Northern' | 'Central' | 'Eastern' | 'Southern' | 'South Western';
+export type AirbaseStatus = 'Operational' | 'Spares Needed' | 'Maintenance' | 'Critical';
+export type AirbaseStatusLevel = 'normal' | 'warning' | 'in_progress' | 'critical';
+
+export interface AircraftTypeCount {
+  type: string;
+  total: number;
+  serviceable: number;
+  maintenance: number;
+  grounded: number;
+}
+
+export interface CommanderAirbase {
+  id: string;
+  name: string;
+  code: string;
+  command: AirbaseCommand;
+  lat: number;
+  lng: number;
+  status: AirbaseStatus;
+  statusLevel: AirbaseStatusLevel;
+  totalAircraft: number;
+  serviceable: number;
+  underMaintenance: number;
+  grounded: number;
+  readinessPct: number;
+  squadrons: string[];
+  aircraftBreakdown: AircraftTypeCount[];
+  blockers: string[];
+  commanderName: string;
+  lastInspection: string;
+  image?: string;
+}
+
+export type ApprovalPriority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+export type ApprovalType =
+  | 'Spare Part Procurement'
+  | 'Return to Service'
+  | 'Resource Reallocation'
+  | 'Priority Change'
+  | 'Cross Base Transfer';
+
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CLARIFICATION_REQUESTED';
+
+export interface CommandApprovalItem {
+  id: string;
+  title: string;
+  type: ApprovalType;
+  priority: ApprovalPriority;
+  baseName: string;
+  aircraft: string;
+  requester: string;
+  date: string;
+  amountOrScope: string;
+  justification: string;
+  impact: string;
+  status: ApprovalStatus;
+  decisionNotes?: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  ledgerEntryId?: string;
+  ledgerHash?: string;
+}
+
+export interface CommanderFleetMetrics {
+  totalAircraft: number;
+  totalAircraftChange: string;
+  serviceable: number;
+  serviceablePct: number;
+  underMaintenance: number;
+  underMaintenancePct: number;
+  grounded: number;
+  groundedPct: number;
+  awaitingApproval: number;
+  overallReadinessPct: number;
+  trend7d: { day: string; readiness: number; target: number }[];
+  trend30d: { day: string; readiness: number; target: number }[];
+  trend90d: { day: string; readiness: number; target: number }[];
+  readinessByType: { type: string; readiness: number; count: number }[];
+  keyInsights: {
+    title: string;
+    metric: string;
+    detail: string;
+    trend: 'up' | 'down' | 'neutral';
+    tone: 'positive' | 'warning' | 'neutral';
+  }[];
+}
+
+export interface ApprovalActionRequest {
+  action: 'APPROVE' | 'REJECT' | 'CLARIFY';
+  notes: string;
+  officer_name?: string;
+  officer_role?: string;
+}
+
+export interface ApprovalActionResponse {
+  success: boolean;
+  message: string;
+  approval: CommandApprovalItem;
+  ledger_entry_id: string;
+  ledger_hash: string;
+}
+
+
 

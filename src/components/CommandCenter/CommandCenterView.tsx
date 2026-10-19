@@ -4,12 +4,26 @@ import {
   CheckCircle2,
   Wrench,
   AlertTriangle,
+  ShieldCheck,
+  Clock,
+  Download,
   ArrowRight,
+  TrendingUp,
+  FileSpreadsheet,
+  Printer,
   ChevronRight,
+  Building,
+  Check,
 } from 'lucide-react';
-import { BaseId, FleetTableItem, FleetSummary, WorkOrder } from '../../types/aircraft';
-import { mockAirDoctorService } from '../../services/mockAirDoctorService';
+import {
+  CommanderAirbase,
+  CommandApprovalItem,
+  CommanderFleetMetrics,
+  BaseId,
+} from '../../types/aircraft';
 import { api } from '../../services/apiClient';
+import { IndiaAirbaseMap } from './IndiaAirbaseMap';
+import { CommandApprovalsModal } from './CommandApprovalsModal';
 
 interface CommandCenterViewProps {
   selectedBaseId: BaseId;
@@ -19,336 +33,686 @@ interface CommandCenterViewProps {
 }
 
 export const CommandCenterView: React.FC<CommandCenterViewProps> = ({
-  selectedBaseId,
   onSelectAircraftAndNavigate,
   onNavigate,
 }) => {
-  const [fleetFilter, setFleetFilter] = useState<'All' | 'Rafale' | 'Tejas'>('All');
-  const [fleetSummary, setFleetSummary] = useState<FleetSummary>(() => mockAirDoctorService.getFleetSummary(selectedBaseId));
-  const [fleetTable, setFleetTable] = useState<FleetTableItem[]>(() => mockAirDoctorService.getFleetTable(selectedBaseId, fleetFilter));
-  const [priorityWorkOrders, setPriorityWorkOrders] = useState<WorkOrder[]>(() =>
-    mockAirDoctorService.getWorkOrders(selectedBaseId).slice(0, 3)
-  );
+  const [metrics, setMetrics] = useState<CommanderFleetMetrics | null>(null);
+  const [airbases, setAirbases] = useState<CommanderAirbase[]>([]);
+  const [approvals, setApprovals] = useState<CommandApprovalItem[]>([]);
+  const [selectedBase, setSelectedBase] = useState<CommanderAirbase | null>(null);
+  const [selectedApproval, setSelectedApproval] = useState<CommandApprovalItem | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [tableCommandFilter, setTableCommandFilter] = useState<string>('All Commands');
+  const [trendPeriod, setTrendPeriod] = useState<'7d' | '30d' | '90d'>('7d');
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    api.getFleetSummary(selectedBaseId).then((data) => {
-      if (active && data) setFleetSummary(data);
+  // Load data from FastAPI or Mock Service
+  const loadData = () => {
+    api.getCommanderFleetMetrics().then((data) => {
+      if (data) setMetrics(data);
     });
-    api.getFleetTable(selectedBaseId, fleetFilter).then((data) => {
-      if (active && data) setFleetTable(data);
-    });
-    api.getWorkOrders(selectedBaseId).then((orders) => {
-      if (active && orders && orders.length > 0) {
-        const sorted = [...orders].sort((a, b) => {
-          if (a.priority === 'High' && b.priority !== 'High') return -1;
-          if (b.priority === 'High' && a.priority !== 'High') return 1;
-          if (a.status === 'Delayed' && b.status !== 'Delayed') return -1;
-          if (b.status === 'Delayed' && a.status !== 'Delayed') return 1;
-          return 0;
-        });
-        setPriorityWorkOrders(sorted.slice(0, 3));
+    api.getCommanderAirbases().then((data) => {
+      if (data && data.length > 0) {
+        setAirbases(data);
+        if (!selectedBase) {
+          // Default to Ambala AFS as seen in mockup
+          const ambala = data.find((b) => b.id === 'ambala') || data[0];
+          setSelectedBase(ambala);
+        }
       }
     });
-    return () => { active = false; };
-  }, [selectedBaseId, fleetFilter]);
+    api.getCommanderApprovals().then((data) => {
+      if (data) setApprovals(data);
+    });
+  };
 
-  // Ensure attention counter is always consistent with active critical/delayed work orders
-  // Never show 0 alerts when Tejas AR-02 / T-04 has a critical hydraulic bottleneck
-  const criticalOrdersCount = priorityWorkOrders.filter(
-    (w) => (w.priority === 'High' || w.status === 'Delayed') && w.status !== 'Completed'
-  ).length;
-  const effectiveAttentionCount = Math.max(
-    fleetSummary.attentionRequired || 0,
-    selectedBaseId === 'base-alpha' ? 0 : Math.max(2, criticalOrdersCount)
-  );
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  // SVG Gauge calculations
-  const radius = 34;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset =
-    circumference - ((fleetSummary.fleetReadinessScore || 75) / 100) * circumference;
+  const handleAirbaseSelect = (base: CommanderAirbase) => {
+    setSelectedBase(base);
+  };
+
+  const handleOpenApprovalModal = (approval: CommandApprovalItem) => {
+    setSelectedApproval(approval);
+    setIsModalOpen(true);
+  };
+
+  const handleDecisionComplete = (res: any) => {
+    setToastMessage(res.message);
+    setTimeout(() => setToastMessage(null), 5000);
+    // Reload live approvals & metrics
+    loadData();
+  };
+
+  const filteredTableBases = airbases.filter((b) => {
+    if (tableCommandFilter === 'All Commands') return true;
+    return b.command === tableCommandFilter;
+  });
+
+  const getStatusBadgeClass = (level: string) => {
+    switch (level) {
+      case 'critical':
+        return 'bg-red-50 text-red-700 border-red-200';
+      case 'warning':
+        return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'in_progress':
+        return 'bg-orange-50 text-orange-700 border-orange-200';
+      case 'normal':
+      default:
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+  };
+
+  const exportSummaryCsv = () => {
+    let csv = 'Airbase,Command,Total Jets,Serviceable,Maintenance,Grounded,Readiness %\n';
+    airbases.forEach((b) => {
+      csv += `"${b.name}","${b.command}",${b.totalAircraft},${b.serviceable},${b.underMaintenance},${b.grounded},${b.readinessPct}%\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `IAF_Fleet_Status_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportModal(false);
+  };
+
+  // Trend data points based on period
+  const currentTrendPoints =
+    trendPeriod === '7d'
+      ? metrics?.trend7d || []
+      : trendPeriod === '30d'
+      ? metrics?.trend30d || []
+      : metrics?.trend90d || [];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-150">
-      {/* Page Header matching Reference Image */}
-      <div>
-        <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-          <span>Command Center — Overview</span>
-        </h1>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Get a clear view of your fleet, maintenance status and key alerts.
-        </p>
+    <div className="space-y-6 animate-in fade-in duration-150 text-slate-800">
+      {/* Toast Banner */}
+      {toastMessage && (
+        <div className="fixed top-16 right-8 z-50 p-4 bg-slate-900 border border-emerald-500/50 rounded-2xl text-xs text-white shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4">
+          <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <Check className="w-4 h-4" />
+          </div>
+          <span className="font-medium">{toastMessage}</span>
+        </div>
+      )}
+
+      {/* 1. Page Header matching Reference Image */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+            <span>Command Center</span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold">
+              OPERATIONS HQ
+            </span>
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Fleet overview, airbase status & operational approvals
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Timestamp Indicator */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200/80 rounded-xl text-xs font-semibold text-slate-600 shadow-2xs">
+            <Clock className="w-3.5 h-3.5 text-slate-400" />
+            <span className="font-mono">19 Oct 2026 12:40 IST</span>
+          </div>
+
+          {/* Export Report Action */}
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Report</span>
+          </button>
+        </div>
       </div>
 
-      {/* Top 5 Metric Cards matching Reference Image */}
+      {/* 2. Top 5 KPI Cards matching Reference Image */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {/* Total Aircraft */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
             <Plane className="w-5 h-5" />
           </div>
           <div>
             <div className="text-2xl font-black text-slate-900 leading-none">
-              {fleetSummary.totalAircraft}
+              {metrics?.totalAircraft || 142}
             </div>
-            <div className="text-xs font-semibold text-slate-500 mt-1">Total Aircraft</div>
+            <div className="text-xs font-bold text-slate-700 mt-1">Total Aircraft</div>
+            <div className="text-[11px] font-semibold text-emerald-700 mt-0.5">
+              {metrics?.totalAircraftChange || '↑ 2%'} vs last month
+            </div>
           </div>
         </div>
 
-        {/* Ready to Fly */}
+        {/* Serviceable */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
             <div className="text-2xl font-black text-slate-900 leading-none">
-              {fleetSummary.readyToFly}
+              {metrics?.serviceable || 98}
             </div>
-            <div className="text-xs font-semibold text-slate-500 mt-1">Ready to Fly</div>
+            <div className="text-xs font-bold text-slate-700 mt-1">Serviceable</div>
+            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
+              {metrics?.serviceablePct || 69}% fleet readiness
+            </div>
           </div>
         </div>
 
-        {/* In Maintenance */}
+        {/* Under Maintenance */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
             <Wrench className="w-5 h-5" />
           </div>
           <div>
             <div className="text-2xl font-black text-slate-900 leading-none">
-              {fleetSummary.inMaintenance}
+              {metrics?.underMaintenance || 32}
             </div>
-            <div className="text-xs font-semibold text-slate-500 mt-1">In Maintenance</div>
+            <div className="text-xs font-bold text-slate-700 mt-1">Under Maintenance</div>
+            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
+              {metrics?.underMaintenancePct || 22}% undergoing work
+            </div>
           </div>
         </div>
 
-        {/* Attention */}
+        {/* Grounded / Attention */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
             <AlertTriangle className="w-5 h-5" />
           </div>
           <div>
             <div className="text-2xl font-black text-slate-900 leading-none">
-              {effectiveAttentionCount}
+              {metrics?.grounded || 12}
             </div>
-            <div className="text-xs font-semibold text-slate-500 mt-1">Attention</div>
+            <div className="text-xs font-bold text-slate-700 mt-1">Grounded / Attention</div>
+            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
+              {metrics?.groundedPct || 8}% critical issues
+            </div>
           </div>
         </div>
 
-        {/* Fleet Readiness Radial Gauge */}
-        <div className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex items-center gap-3">
-          <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
-            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 80 80">
-              <circle cx="40" cy="40" r={radius} stroke="#F1F5F9" strokeWidth="6" fill="transparent" />
-              <circle
-                cx="40"
-                cy="40"
-                r={radius}
-                stroke="#10B981"
-                strokeWidth="6"
-                strokeDasharray={circumference}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                fill="transparent"
-              />
-            </svg>
+        {/* Awaiting Approval */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
             <div className="text-2xl font-black text-slate-900 leading-none">
-              {fleetSummary.fleetReadinessScore}%
+              {metrics?.awaitingApproval || approvals.filter((a) => a.status === 'PENDING').length}
             </div>
-            <div className="text-xs font-semibold text-slate-500 mt-1">Fleet Readiness</div>
+            <div className="text-xs font-bold text-slate-700 mt-1">Awaiting Approval</div>
+            <button
+              onClick={() => onNavigate('command-approvals')}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 mt-0.5 flex items-center gap-0.5"
+            >
+              <span>View approvals</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Main Grid: Fleet Status Table (Left) + Priority Work Orders (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Fleet Status Card (7 cols) */}
-        <div className="lg:col-span-7 bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h2 className="text-base font-bold text-slate-900">Fleet Status</h2>
-              {/* Category Pills matching Reference Image */}
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
-                <button
-                  onClick={() => setFleetFilter('All')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    fleetFilter === 'All'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  All ({fleetSummary.totalAircraft})
-                </button>
-                <button
-                  onClick={() => setFleetFilter('Rafale')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    fleetFilter === 'Rafale'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Rafale (12)
-                </button>
-                <button
-                  onClick={() => setFleetFilter('Tejas')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    fleetFilter === 'Tejas'
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Tejas (12)
-                </button>
+      {/* 3. Middle Section: India Airbase Map (58%) + Selected Base Details (21%) + Pending Approvals (21%) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Interactive India Airbase Map */}
+        <div className="lg:col-span-7">
+          <IndiaAirbaseMap
+            airbases={airbases}
+            selectedBaseId={selectedBase?.id || 'ambala'}
+            onSelectBase={handleAirbaseSelect}
+          />
+        </div>
+
+        {/* Selected Base Details Panel */}
+        <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] p-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  {selectedBase?.command || 'Western'} Command
+                </span>
+                <h3 className="text-base font-black text-slate-900 leading-tight">
+                  {selectedBase?.name || 'Ambala AFS'}
+                </h3>
+                <span className="text-[11px] font-mono text-slate-500">
+                  Code: {selectedBase?.code || 'AFS-AMB'}
+                </span>
+              </div>
+              <span
+                className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${getStatusBadgeClass(
+                  selectedBase?.statusLevel || 'warning'
+                )}`}
+              >
+                {selectedBase?.status || 'Spares Needed'}
+              </span>
+            </div>
+
+            {/* Tactical Base Thumbnail / Badge */}
+            <div className="my-3.5 p-3 rounded-xl bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-mono text-slate-400 uppercase">Station Commander</div>
+                <div className="text-xs font-bold text-white mt-0.5">{selectedBase?.commanderName}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Last Inspection: {selectedBase?.lastInspection}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-xl font-black text-emerald-400">
+                  {selectedBase?.readinessPct}%
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono">READINESS</div>
               </div>
             </div>
 
-            <button
-              onClick={() => onNavigate('aircraft-health')}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              View All
-            </button>
+            {/* Aircraft Breakdown by Type */}
+            <div className="space-y-2 mt-3">
+              <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                Assigned Squadrons & Jets
+              </div>
+              {selectedBase?.aircraftBreakdown.map((item, idx) => (
+                <div key={idx} className="p-2.5 bg-slate-50 rounded-xl border border-slate-200/70 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800">{item.type}</span>
+                    <span className="font-mono text-slate-600">
+                      <strong>{item.serviceable}</strong>/{item.total} ready
+                    </span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full h-1.5 bg-slate-200 rounded-full mt-1.5 overflow-hidden flex">
+                    <div
+                      className="bg-emerald-500 h-full"
+                      style={{ width: `${(item.serviceable / item.total) * 100}%` }}
+                    />
+                    <div
+                      className="bg-orange-500 h-full"
+                      style={{ width: `${(item.maintenance / item.total) * 100}%` }}
+                    />
+                    <div
+                      className="bg-red-500 h-full"
+                      style={{ width: `${(item.grounded / item.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Active Blockers */}
+            {selectedBase?.blockers && selectedBase.blockers.length > 0 && (
+              <div className="mt-3.5 space-y-1.5">
+                <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Active Blockers
+                </div>
+                {selectedBase.blockers.map((blocker, i) => (
+                  <div
+                    key={i}
+                    className="p-2 bg-amber-50 border border-amber-200/80 rounded-lg text-[11px] text-amber-900 leading-snug"
+                  >
+                    {blocker}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Table matching Reference Image */}
-          <div className="overflow-x-auto">
+          <button
+            onClick={() => onNavigate('base-operations')}
+            className="w-full mt-4 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1"
+          >
+            <span>View Base Details</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Pending Command Approvals Panel */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] p-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 leading-tight">Command Approvals</h3>
+                <p className="text-[10px] text-slate-500">Operational sign-offs</p>
+              </div>
+              <span className="text-[11px] font-black px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
+                {approvals.filter((a) => a.status === 'PENDING').length} PENDING
+              </span>
+            </div>
+
+            {/* List of Approval Cards */}
+            <div className="space-y-2.5 mt-3 overflow-y-auto max-h-[420px] pr-0.5">
+              {approvals.slice(0, 5).map((app) => (
+                <div
+                  key={app.id}
+                  className="p-3 bg-slate-50 hover:bg-blue-50/40 rounded-xl border border-slate-200/80 transition-colors group"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[10px] font-bold text-slate-500">{app.id}</span>
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        app.priority === 'CRITICAL'
+                          ? 'bg-red-100 text-red-700'
+                          : app.priority === 'HIGH'
+                          ? 'bg-orange-100 text-orange-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
+                      {app.priority}
+                    </span>
+                  </div>
+                  <div className="font-bold text-xs text-slate-900 mt-1 line-clamp-1">{app.title}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5 truncate">{app.baseName}</div>
+                  <div className="mt-2 flex items-center justify-between pt-1.5 border-t border-slate-200/60">
+                    <span className="text-[10px] font-semibold text-slate-600 truncate mr-2">
+                      {app.aircraft}
+                    </span>
+                    <button
+                      onClick={() => handleOpenApprovalModal(app)}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 shrink-0"
+                    >
+                      <span>Review</span>
+                      <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={() => onNavigate('command-approvals')}
+            className="w-full mt-3 py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/70 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1"
+          >
+            <span>All Approvals</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 4. Bottom Row: Airbases Summary Table (50%) + Fleet Readiness Trend (30%) + Key Insights (20%) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Panel 1: Airbases Summary Table */}
+        <div className="lg:col-span-6 bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] p-4 flex flex-col">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 leading-tight">Airbases Summary</h3>
+              <p className="text-[10px] text-slate-500">Fleet distribution across commands</p>
+            </div>
+            {/* Command Filter Pills */}
+            <div className="flex items-center gap-1 overflow-x-auto">
+              {[
+                'All Commands',
+                'Western',
+                'Northern',
+                'Central',
+                'Eastern',
+                'Southern',
+                'South Western',
+              ].map((cmd) => (
+                <button
+                  key={cmd}
+                  onClick={() => setTableCommandFilter(cmd)}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-colors shrink-0 ${
+                    tableCommandFilter === cmd
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {cmd}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Table Container */}
+          <div className="overflow-x-auto mt-3 max-h-[300px]">
             <table className="w-full text-left text-xs">
-              <thead className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+              <thead className="bg-slate-50 text-[10px] font-bold text-slate-600 uppercase tracking-wider sticky top-0">
                 <tr>
-                  <th className="pb-3 font-semibold">Aircraft</th>
-                  <th className="pb-3 font-semibold">Type</th>
-                  <th className="pb-3 font-semibold">Status</th>
-                  <th className="pb-3 font-semibold">Health</th>
-                  <th className="pb-3 font-semibold">Next Flight</th>
+                  <th className="py-2 px-3 rounded-l-lg">Airbase</th>
+                  <th className="py-2 px-2">Command</th>
+                  <th className="py-2 px-2 text-center">Total</th>
+                  <th className="py-2 px-2 text-center">Serviceable</th>
+                  <th className="py-2 px-2 text-center">Maint</th>
+                  <th className="py-2 px-2 text-center">Readiness</th>
+                  <th className="py-2 px-3 rounded-r-lg text-right">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50 font-medium">
-                {fleetTable.slice(0, 5).map((row) => (
-                  <tr
-                    key={row.id}
-                    onClick={() => {
-                      const aircraftTarget = row.type === 'Rafale' ? 'rafale' : 'tejas';
-                      onSelectAircraftAndNavigate(aircraftTarget);
-                    }}
-                    className="hover:bg-slate-50/80 cursor-pointer transition-colors group"
-                  >
-                    <td className="py-3 font-bold text-slate-900 flex items-center gap-1.5">
-                      <span>{row.code}</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
-                    </td>
-                    <td className="py-3 text-slate-600">{row.type}</td>
-                    <td className="py-3">
-                      <span className="flex items-center gap-1.5 font-semibold">
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {filteredTableBases.map((base) => {
+                  const isSelected = selectedBase?.id === base.id;
+                  return (
+                    <tr
+                      key={base.id}
+                      onClick={() => handleAirbaseSelect(base)}
+                      className={`cursor-pointer transition-colors ${
+                        isSelected ? 'bg-blue-50/70 font-semibold' : 'hover:bg-slate-50/70'
+                      }`}
+                    >
+                      <td className="py-2 px-3 font-bold text-slate-900 flex items-center gap-1.5">
+                        <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{base.name}</span>
+                      </td>
+                      <td className="py-2 px-2 text-slate-500 text-[11px]">{base.command}</td>
+                      <td className="py-2 px-2 text-center font-mono font-bold">{base.totalAircraft}</td>
+                      <td className="py-2 px-2 text-center font-mono text-emerald-700 font-bold">
+                        {base.serviceable}
+                      </td>
+                      <td className="py-2 px-2 text-center font-mono text-orange-700">
+                        {base.underMaintenance}
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        <span className="font-mono font-bold text-slate-900">{base.readinessPct}%</span>
+                      </td>
+                      <td className="py-2 px-3 text-right">
                         <span
-                          className={`w-2 h-2 rounded-full ${
-                            row.status === 'Ready'
-                              ? 'bg-emerald-500'
-                              : row.status === 'Maintenance'
-                              ? 'bg-amber-500'
-                              : 'bg-rose-500'
-                          }`}
-                        />
-                        <span
-                          className={
-                            row.status === 'Ready'
-                              ? 'text-slate-800'
-                              : row.status === 'Maintenance'
-                              ? 'text-amber-700'
-                              : 'text-rose-700'
-                          }
+                          className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${getStatusBadgeClass(
+                            base.statusLevel
+                          )}`}
                         >
-                          {row.status}
+                          {base.status}
                         </span>
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${
-                              row.health >= 85
-                                ? 'bg-emerald-500'
-                                : row.health >= 60
-                                ? 'bg-amber-500'
-                                : 'bg-rose-500'
-                            }`}
-                            style={{ width: `${row.health}%` }}
-                          />
-                        </div>
-                        <span className="font-mono text-slate-800 font-bold">{row.health}%</span>
-                      </div>
-                    </td>
-                    <td className="py-3 text-slate-500">{row.nextFlight}</td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Priority Work Orders Card (5 cols) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-900">Priority Work Orders</h2>
-            <button
-              onClick={() => onNavigate('work-orders')}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              View All
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {priorityWorkOrders.map((wo) => {
-              const isHigh = wo.priority === 'High' || wo.status === 'Delayed';
-              const detailText = wo.delayReason
-                ? wo.delayReason
-                : wo.requiredSpare
-                ? `Awaiting spare ${wo.requiredSpare}`
-                : wo.assignedTech
-                ? `Assigned to ${wo.assignedTech} • ${wo.assignedBay || 'Hangar'}`
-                : `Scheduled for inspection`;
-
-              return (
-                <div
-                  key={wo.id}
-                  onClick={() => onNavigate('work-orders')}
-                  className="p-3.5 rounded-xl border border-slate-100 hover:border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all cursor-pointer flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                        isHigh ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
-                      }`}
-                    >
-                      <AlertTriangle className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-extrabold text-slate-900 leading-snug">
-                        {wo.component} {wo.type}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed break-words whitespace-normal">
-                        <span className="font-semibold text-slate-700">{wo.aircraft}</span> • {detailText}
-                      </p>
-                    </div>
-                  </div>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
-                      isHigh
-                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+        {/* Panel 2: Fleet Readiness Trend */}
+        <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] p-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 leading-tight">Fleet Readiness Trend</h3>
+                <p className="text-[10px] text-slate-500">Readiness vs 75% Target Line</p>
+              </div>
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold">
+                {(['7d', '30d', '90d'] as const).map((period) => (
+                  <button
+                    key={period}
+                    onClick={() => setTrendPeriod(period)}
+                    className={`px-2 py-0.5 rounded ${
+                      trendPeriod === period ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
                     }`}
                   >
-                    {wo.priority}
-                  </span>
+                    {period.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* SVG Readiness Line Chart */}
+            <div className="mt-3 relative h-36 w-full">
+              <svg viewBox="0 0 300 130" className="w-full h-full overflow-visible">
+                {/* Background gridlines */}
+                <line x1="0" y1="20" x2="300" y2="20" stroke="#E2E8F0" strokeWidth="0.8" strokeDasharray="2,2" />
+                <line x1="0" y1="50" x2="300" y2="50" stroke="#E2E8F0" strokeWidth="0.8" strokeDasharray="2,2" />
+                <line x1="0" y1="80" x2="300" y2="80" stroke="#E2E8F0" strokeWidth="0.8" strokeDasharray="2,2" />
+                <line x1="0" y1="110" x2="300" y2="110" stroke="#E2E8F0" strokeWidth="0.8" />
+
+                {/* 75% Target Threshold (Dashed Amber/Emerald Line) */}
+                <line
+                  x1="0"
+                  y1="45"
+                  x2="300"
+                  y2="45"
+                  stroke="#10B981"
+                  strokeWidth="1.5"
+                  strokeDasharray="4,3"
+                />
+                <text x="230" y="40" fill="#10B981" fontSize="9" fontWeight="700">
+                  Target 75%
+                </text>
+
+                {/* Actual Readiness Trend Curve */}
+                <path
+                  d="M 10 75 Q 50 68, 100 70 T 190 60 T 290 55"
+                  fill="none"
+                  stroke="#2563EB"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                />
+
+                {/* Data Points */}
+                {currentTrendPoints.map((pt, idx) => {
+                  const x = 15 + idx * (270 / Math.max(1, currentTrendPoints.length - 1));
+                  const y = 110 - (pt.readiness / 100) * 80;
+                  return (
+                    <g key={idx}>
+                      <circle cx={x} cy={y} r="3.5" fill="#2563EB" stroke="#FFFFFF" strokeWidth="1.5" />
+                      <text x={x} y="125" textAnchor="middle" fill="#94A3B8" fontSize="8" fontWeight="600">
+                        {pt.day.slice(0, 5)}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+
+            {/* Readiness by Aircraft Type Progress Bars */}
+            <div className="space-y-2 mt-4 pt-3 border-t border-slate-100">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Readiness by Aircraft Type
+              </div>
+              {metrics?.readinessByType.map((item) => (
+                <div key={item.type} className="text-xs">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-slate-800">{item.type}</span>
+                    <span className="font-mono font-bold text-slate-900">{item.readiness}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        item.readiness >= 75 ? 'bg-emerald-500' : 'bg-blue-600'
+                      }`}
+                      style={{ width: `${item.readiness}%` }}
+                    />
+                  </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Panel 3: Key Insights */}
+        <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] p-4 flex flex-col justify-between">
+          <div>
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-black text-slate-900 leading-tight">Key Insights</h3>
+              <p className="text-[10px] text-slate-500">Autonomous operational analytics</p>
+            </div>
+
+            <div className="space-y-3 mt-3">
+              {metrics?.keyInsights.map((insight, idx) => (
+                <div
+                  key={idx}
+                  className={`p-3 rounded-xl border ${
+                    insight.tone === 'warning'
+                      ? 'bg-amber-50/70 border-amber-200/80'
+                      : 'bg-slate-50 border-slate-200/80'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-700">{insight.title}</span>
+                    <span
+                      className={`text-xs font-black ${
+                        insight.tone === 'warning' ? 'text-amber-700' : 'text-emerald-700'
+                      }`}
+                    >
+                      {insight.metric}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 mt-1 leading-snug">{insight.detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={() => onNavigate('strategic-insights')}
+            className="w-full mt-4 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
+            <span>Deep Strategic Insights</span>
+          </button>
+        </div>
       </div>
+
+      {/* Review & Decision Modal */}
+      <CommandApprovalsModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        approval={selectedApproval}
+        onDecisionComplete={handleDecisionComplete}
+      />
+
+      {/* Export Report Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-slate-200 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Download className="w-4 h-4 text-blue-600" /> Export Fleet Command Report
+            </h3>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Generate an official Indian Air Force operational readiness report containing all 26 airbases,
+              assigned aircraft, serviceable rates, and active depot bottlenecks.
+            </p>
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                onClick={exportSummaryCsv}
+                className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+              >
+                <FileSpreadsheet className="w-4 h-4" /> Download Airbases Summary CSV
+              </button>
+              <button
+                onClick={() => {
+                  window.print();
+                  setShowExportModal(false);
+                }}
+                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+              >
+                <Printer className="w-4 h-4" /> Print Operational Briefing
+              </button>
+            </div>
+            <div className="text-right pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

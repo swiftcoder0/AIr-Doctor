@@ -10,10 +10,15 @@ import { WorkOrdersView } from './components/WorkOrders/WorkOrdersView';
 import { ReportsAnalyticsView } from './components/Reports/ReportsAnalyticsView';
 import { AiAssistantView } from './components/AiAssistant/AiAssistantView';
 import { LoginGateView } from './components/Auth/LoginGateView';
+import { BaseOperationsView } from './components/CommandCenter/BaseOperationsView';
+import { FleetOverviewView } from './components/CommandCenter/FleetOverviewView';
+import { CommandApprovalsView } from './components/CommandCenter/CommandApprovalsView';
+import { StrategicInsightsView } from './components/CommandCenter/StrategicInsightsView';
 import { BaseId, AircraftData, UserRole, VerifyDepartmentTotpResponse } from './types/aircraft';
 import { mockAirDoctorService } from './services/mockAirDoctorService';
 import { api, setActiveUserRole } from './services/apiClient';
 import { SecurityModal } from './components/Security/SecurityModal';
+
 
 interface AuthSession {
   departmentId: string;
@@ -191,17 +196,48 @@ export function App() {
           onNavChange={setActiveNav}
           selectedBaseId={selectedBaseId}
           onSelectBase={handleSelectBase}
+          currentRole={currentRole}
+          pendingApprovalsCount={5}
         />
 
         {/* Scrollable Main Content Area */}
         <main className="flex-1 overflow-y-auto p-6 max-w-[1740px] mx-auto w-full">
-          {/* PAGE 1: Command Center (Image 1, 1/4) */}
+          {/* PAGE 1: Command Center (Commander) */}
           {activeNav === 'command-center' && (
             <CommandCenterView
               selectedBaseId={selectedBaseId}
               onSelectBase={handleSelectBase}
               onSelectAircraftAndNavigate={handleSelectAircraftAndNavigate}
               onNavigate={setActiveNav}
+            />
+          )}
+
+          {/* Commander Subview: Base Operations */}
+          {activeNav === 'base-operations' && (
+            <BaseOperationsView
+              onNavigateToCommandCenter={() => setActiveNav('command-center')}
+            />
+          )}
+
+          {/* Commander Subview: Fleet Overview */}
+          {activeNav === 'fleet-overview' && (
+            <FleetOverviewView
+              onSelectAircraftAndNavigate={handleSelectAircraftAndNavigate}
+              onNavigateToCommandCenter={() => setActiveNav('command-center')}
+            />
+          )}
+
+          {/* Commander Subview: Command Approvals */}
+          {activeNav === 'command-approvals' && (
+            <CommandApprovalsView
+              onNavigateToCommandCenter={() => setActiveNav('command-center')}
+            />
+          )}
+
+          {/* Commander Subview: Strategic Insights */}
+          {activeNav === 'strategic-insights' && (
+            <StrategicInsightsView
+              onNavigateToCommandCenter={() => setActiveNav('command-center')}
             />
           )}
 
@@ -260,8 +296,8 @@ export function App() {
             />
           )}
 
-          {/* PAGE 7: Reports & Analytics (Image 2, 7/7) */}
-          {(activeNav === 'reports-analytics' || activeNav === 'reports-ledger') && (
+          {/* PAGE 7: Reports & Analytics */}
+          {(activeNav === 'reports' || activeNav === 'reports-analytics' || activeNav === 'reports-ledger') && (
             <ReportsAnalyticsView
               selectedBaseId={selectedBaseId}
               onSelectBase={handleSelectBase}
@@ -269,6 +305,7 @@ export function App() {
             />
           )}
         </main>
+
       </div>
 
       {/* Cybersecurity & TOTP MFA Modal (Task 2) */}

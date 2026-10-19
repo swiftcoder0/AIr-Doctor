@@ -131,6 +131,17 @@ def verify_rbac_write_permission(x_airdoctor_role: Optional[str] = Header(None, 
             detail="RBAC Policy: Viewer role is strictly read-only. Write actions (verify, reject, work order edits) require Planner or Commander authorization.",
         )
 
+def verify_commander_permission(x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role")):
+    """
+    FastAPI dependency that enforces Commander-only authorization for operational decisions.
+    """
+    if not x_airdoctor_role or x_airdoctor_role.strip().lower() != "commander":
+        raise HTTPException(
+            status_code=403,
+            detail="RBAC Policy: Only the Air Fleet Commander is authorized to approve or reject operational command decisions.",
+        )
+
+
 # -------------------------------------------------------------
 # Ministry of Defence SIH: 5 Official Department Profiles
 # -------------------------------------------------------------

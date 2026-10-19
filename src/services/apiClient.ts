@@ -26,6 +26,11 @@ import {
   DepartmentLoginResponse,
   VerifyDepartmentTotpRequest,
   VerifyDepartmentTotpResponse,
+  CommanderAirbase,
+  CommandApprovalItem,
+  CommanderFleetMetrics,
+  ApprovalActionRequest,
+  ApprovalActionResponse,
 } from '../types/aircraft';
 import { mockAirDoctorService } from './mockAirDoctorService';
 
@@ -434,4 +439,49 @@ export const api = {
       return res;
     }
   },
+
+  async getCommanderFleetMetrics(): Promise<CommanderFleetMetrics> {
+    try {
+      const data = await fetchJson<CommanderFleetMetrics>('/commander/fleet-metrics');
+      return data;
+    } catch {
+      return mockAirDoctorService.getCommanderFleetMetrics();
+    }
+  },
+
+  async getCommanderAirbases(): Promise<CommanderAirbase[]> {
+    try {
+      const data = await fetchJson<CommanderAirbase[]>('/commander/airbases');
+      return data;
+    } catch {
+      return mockAirDoctorService.getCommanderAirbases();
+    }
+  },
+
+  async getCommanderApprovals(): Promise<CommandApprovalItem[]> {
+    try {
+      const data = await fetchJson<CommandApprovalItem[]>('/commander/approvals');
+      return data;
+    } catch {
+      return mockAirDoctorService.getCommanderApprovals();
+    }
+  },
+
+  async actionCommanderApproval(
+    approvalId: string,
+    req: ApprovalActionRequest
+  ): Promise<ApprovalActionResponse> {
+    try {
+      const data = await fetchJson<ApprovalActionResponse>(`/commander/approvals/${approvalId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req),
+      });
+      return data;
+    } catch {
+      return mockAirDoctorService.actionCommanderApproval(approvalId, req);
+    }
+  },
 };
+
+

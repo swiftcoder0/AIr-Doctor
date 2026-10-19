@@ -46,6 +46,11 @@ from backend.schemas import (
     DepartmentProfile,
     DepartmentLoginRequest,
     DepartmentLoginResponse,
+    CommanderAirbase,
+    CommandApprovalItem,
+    CommanderFleetMetrics,
+    ApprovalActionRequest,
+    ApprovalActionResponse,
 )
 from backend.services.fleet_service import (
     get_all_bases,
@@ -57,10 +62,17 @@ from backend.services.fleet_service import (
 from backend.services.csv_service import parse_and_validate_csv, commit_csv_import
 from backend.services.optimizer_service import calculate_what_if_simulation, get_default_optimizer_recommendation
 from backend.services.chat_service import answer_ai_assistant_query
+from backend.services.commander_service import (
+    get_commander_fleet_metrics,
+    get_commander_airbases,
+    get_commander_approvals,
+    execute_approval_action,
+)
 from backend.services.security_service import (
     get_security_status,
     verify_totp_code,
     verify_rbac_write_permission,
+    verify_commander_permission,
     DEPARTMENT_PROFILES,
     authenticate_department_login,
     verify_department_totp,
@@ -682,3 +694,42 @@ def export_ledger_csv(base_id: Optional[str] = Query("all"), db: Session = Depen
 def chat_query(req: ChatQueryRequest, db: Session = Depends(get_db)):
     """Queries AI Assistant against real current database records and calculations."""
     return answer_ai_assistant_query(db=db, user_prompt=req.prompt, base_id=req.base_id)
+
+
+# -------------------------------------------------------------
+# 9. Air Fleet Commander Command Center
+# -------------------------------------------------------------
+@router.get("/commander/fleet-metrics", response_model=CommanderFleetMetrics, tags=["Commander"])
+def get_fleet_metrics_commander():
+    """Returns top-level fleet readiness, KPI metrics, trends (7D/30D/90D), and key insights."""
+    return get_commander_fleet_metrics()
+
+
+@router.get("/commander/airbases", response_model=List[CommanderAirbase], tags=["Commander"])
+def get_airbases_commander():
+    """Returns 26 official Indian Air Force airbases across commands with coordinates, aircraft counts, and blockers."""
+    return get_commander_airbases()
+
+
+@router.get("/commander/approvals", response_model=List[CommandApprovalItem], tags=["Commander"])
+def get_approvals_commander():
+    """Returns pending operational decisions awaiting Commander review and sign-off."""
+    return get_commander_approvals()
+
+
+@router.post("/commander/approvals/{approval_id}/action", response_model=ApprovalActionResponse, tags=["Commander"])
+def action_approval_commander(
+    approval_id: str,
+    req: ApprovalActionRequest,
+    db: Session = Depends(get_db),
+    _rbac: None = Depends(verify_commander_permission),
+):
+    """
+    Executes Commander approval/rejection decision on an operational item.
+    Enforces strict Commander role authorization and records an immutable block into the Decision Ledger.
+    """
+    try:
+        return execute_approval_action(approval_id, req, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+

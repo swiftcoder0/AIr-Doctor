@@ -464,3 +464,110 @@ class ChatQueryResponse(BaseModel):
     timestamp: str
     text: str
     cardData: Optional[ChatCardData] = None
+
+
+# -------------------------------------------------------------
+# Commander Command Center Schemas
+# -------------------------------------------------------------
+class AircraftTypeCount(BaseModel):
+    type: str
+    total: int
+    serviceable: int
+    maintenance: int
+    grounded: int
+
+
+class CommanderAirbase(BaseModel):
+    id: str
+    name: str
+    code: str
+    command: str
+    lat: float
+    lng: float
+    status: str
+    statusLevel: str
+    totalAircraft: int
+    serviceable: int
+    underMaintenance: int
+    grounded: int
+    readinessPct: int
+    squadrons: List[str]
+    aircraftBreakdown: List[AircraftTypeCount]
+    blockers: List[str]
+    commanderName: str
+    lastInspection: str
+    image: Optional[str] = None
+
+
+class CommandApprovalItem(BaseModel):
+    id: str
+    title: str
+    type: str
+    priority: str
+    baseName: str
+    aircraft: str
+    requester: str
+    date: str
+    amountOrScope: str
+    justification: str
+    impact: str
+    status: str
+    decisionNotes: Optional[str] = None
+    decidedBy: Optional[str] = None
+    decidedAt: Optional[str] = None
+    ledgerEntryId: Optional[str] = None
+    ledgerHash: Optional[str] = None
+
+
+class FleetTrendPoint(BaseModel):
+    day: str
+    readiness: int
+    target: int = 75
+
+
+class ReadinessByType(BaseModel):
+    type: str
+    readiness: int
+    count: int
+
+
+class KeyInsightItem(BaseModel):
+    title: str
+    metric: str
+    detail: str
+    trend: str
+    tone: str
+
+
+class CommanderFleetMetrics(BaseModel):
+    totalAircraft: int
+    totalAircraftChange: str
+    serviceable: int
+    serviceablePct: int
+    underMaintenance: int
+    underMaintenancePct: int
+    grounded: int
+    groundedPct: int
+    awaitingApproval: int
+    overallReadinessPct: int
+    trend7d: List[FleetTrendPoint]
+    trend30d: List[FleetTrendPoint]
+    trend90d: List[FleetTrendPoint]
+    readinessByType: List[ReadinessByType]
+    keyInsights: List[KeyInsightItem]
+
+
+class ApprovalActionRequest(BaseModel):
+    action: str  # 'APPROVE' | 'REJECT' | 'CLARIFY'
+    notes: str
+    officer_name: Optional[str] = "Wing Cmdr. Aditya (Fleet Commander)"
+    officer_role: Optional[str] = "Commander"
+
+
+class ApprovalActionResponse(BaseModel):
+    success: bool
+    message: str
+    approval: CommandApprovalItem
+    ledger_entry_id: str
+    ledger_hash: str
+
