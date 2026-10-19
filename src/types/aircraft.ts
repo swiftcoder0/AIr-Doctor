@@ -32,7 +32,7 @@ export interface AircraftComponentData {
   insight: string;
   // Normalized 3D position relative to centered model
   hotspotPosition: [number, number, number];
-  category?: 'propulsion' | 'avionics' | 'aerodynamics' | 'hydraulics' | 'structure' | 'landing';
+  category?: 'propulsion' | 'avionics' | 'aerodynamics' | 'hydraulics' | 'structure' | 'landing' | 'fuel' | 'electrical';
   // Key parameters for bottom drawer
   keyParameters?: {
     pressure?: string;

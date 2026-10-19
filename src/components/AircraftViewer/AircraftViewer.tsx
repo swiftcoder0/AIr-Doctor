@@ -9,21 +9,28 @@ import {
   Move,
   RefreshCw,
   Compass,
+  Layers,
+  Box,
+  MousePointer,
 } from 'lucide-react';
 import { AircraftData, AircraftComponentData } from '../../types/aircraft';
 
-interface AircraftViewerProps {
+export interface AircraftViewerProps {
   aircraft: AircraftData;
   selectedComponent: AircraftComponentData | null;
   onSelectComponent: (comp: AircraftComponentData) => void;
-  activeTab: '3d' | 'components' | 'maintenance' | 'history';
-  onTabChange: (tab: '3d' | 'components' | 'maintenance' | 'history') => void;
+  activeTab?: '3d' | 'components' | 'maintenance' | 'history';
+  onTabChange?: (tab: '3d' | 'components' | 'maintenance' | 'history') => void;
+  showLabels?: boolean;
+  onToggleLabels?: () => void;
+  viewMode?: 'aircraft' | 'system';
+  onViewModeChange?: (mode: 'aircraft' | 'system') => void;
 }
 
-// In-memory model cache for instant switching
+// In-memory model cache for instant switching between Rafale and Tejas
 const modelCache = new Map<string, THREE.Group>();
 
-// Helper to resolve model assets relative to Vite base (works for both root '/' and subpath deployments like GitHub Pages)
+// Helper to resolve model assets relative to Vite base
 const resolveModelUrl = (path: string): string => {
   if (!path || path.startsWith('http://') || path.startsWith('https://')) return path;
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
@@ -35,8 +42,10 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
   aircraft,
   selectedComponent,
   onSelectComponent,
-  activeTab,
-  onTabChange,
+  showLabels: externalShowLabels,
+  onToggleLabels: externalToggleLabels,
+  viewMode: externalViewMode,
+  onViewModeChange: externalViewModeChange,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -54,6 +63,9 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [loadProgress, setLoadProgress] = useState<number>(0);
   const [isAutoRotating, setIsAutoRotating] = useState<boolean>(false);
+  const [isWireframe, setIsWireframe] = useState<boolean>(false);
+  const [internalShowLabels, setInternalShowLabels] = useState<boolean>(true);
+  const [internalViewMode, setInternalViewMode] = useState<'aircraft' | 'system'>('aircraft');
   const [controlMode, setControlMode] = useState<'rotate' | 'pan' | 'zoom'>('rotate');
   const [screenHotspots, setScreenHotspots] = useState<
     Array<{
@@ -64,6 +76,18 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
     }>
   >([]);
 
+  const showLabels = externalShowLabels !== undefined ? externalShowLabels : internalShowLabels;
+  const toggleLabels = externalToggleLabels || (() => setInternalShowLabels((prev) => !prev));
+
+  const viewMode = externalViewMode !== undefined ? externalViewMode : internalViewMode;
+  const handleViewModeChange = (mode: 'aircraft' | 'system') => {
+    if (externalViewModeChange) {
+      externalViewModeChange(mode);
+    } else {
+      setInternalViewMode(mode);
+    }
+  };
+
   // Smooth camera reset animation
   const resetCamera = useCallback(() => {
     if (!cameraRef.current || !controlsRef.current) return;
@@ -72,7 +96,11 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
 
     const startPos = cameraRef.current.position.clone();
     const startTarget = controlsRef.current.target.clone();
-    const endPos = new THREE.Vector3(...initialPos);
+    const endPos = new THREE.Vector3(
+      initialPos[0] * 0.85,
+      initialPos[1] * 0.85,
+      initialPos[2] * 0.85
+    );
     const endTarget = new THREE.Vector3(...initialTarget);
 
     let progress = 0;
@@ -100,19 +128,43 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
 
     switch (view) {
       case 'perspective':
-        cameraRef.current.position.set(...aircraft.modelConfig.initialCameraPosition);
+        cameraRef.current.position.set(
+          aircraft.modelConfig.initialCameraPosition[0] * 0.85,
+          aircraft.modelConfig.initialCameraPosition[1] * 0.85,
+          aircraft.modelConfig.initialCameraPosition[2] * 0.85
+        );
         break;
       case 'top':
-        cameraRef.current.position.set(0, 10, 0.1);
+        cameraRef.current.position.set(0, 9.5, 0.1);
         break;
       case 'side':
-        cameraRef.current.position.set(10, 0.8, 0);
+        cameraRef.current.position.set(9.5, 0.8, 0);
         break;
       case 'front':
-        cameraRef.current.position.set(0, 0.8, 10);
+        cameraRef.current.position.set(0, 0.8, 9.5);
         break;
     }
     controlsRef.current.update();
+  };
+
+  // Toggle wireframe mode
+  const toggleWireframe = () => {
+    const nextState = !isWireframe;
+    setIsWireframe(nextState);
+    if (currentModelGroupRef.current) {
+      currentModelGroupRef.current.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => {
+              if ('wireframe' in m) (m as any).wireframe = nextState;
+            });
+          } else if (mesh.material && 'wireframe' in mesh.material) {
+            (mesh.material as any).wireframe = nextState;
+          }
+        }
+      });
+    }
   };
 
   // Setup Three.js scene once
@@ -120,16 +172,20 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
     if (!canvasRef.current || !containerRef.current) return;
 
     const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight || 520;
+    const height = containerRef.current.clientHeight || 460;
 
     // 1. Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf8fafc);
     sceneRef.current = scene;
 
-    // 2. Camera
-    const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
-    camera.position.set(...aircraft.modelConfig.initialCameraPosition);
+    // 2. Camera: Framed with FOV 36 for prominent aircraft presence
+    const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
+    camera.position.set(
+      aircraft.modelConfig.initialCameraPosition[0] * 0.85,
+      aircraft.modelConfig.initialCameraPosition[1] * 0.85,
+      aircraft.modelConfig.initialCameraPosition[2] * 0.85
+    );
     cameraRef.current = camera;
 
     // 3. Renderer
@@ -142,7 +198,7 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.18;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     rendererRef.current = renderer;
@@ -151,48 +207,46 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
-    controls.minDistance = 3.5;
-    controls.maxDistance = 22;
+    controls.minDistance = 3.0;
+    controls.maxDistance = 20;
     controls.maxPolarAngle = Math.PI / 2 + 0.05;
     controls.target.set(...aircraft.modelConfig.initialTarget);
     controlsRef.current = controls;
 
-    // 5. Lighting: Studio aerospace lighting rig
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
+    // 5. Studio Aerospace Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe2e8f0, 0.8);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe2e8f0, 0.9);
     hemiLight.position.set(0, 20, 0);
     scene.add(hemiLight);
 
-    const mainKeyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    const mainKeyLight = new THREE.DirectionalLight(0xffffff, 2.4);
     mainKeyLight.position.set(8, 12, 10);
     mainKeyLight.castShadow = true;
     mainKeyLight.shadow.mapSize.width = 2048;
     mainKeyLight.shadow.mapSize.height = 2048;
-    mainKeyLight.shadow.camera.near = 0.5;
-    mainKeyLight.shadow.camera.far = 30;
     mainKeyLight.shadow.bias = -0.0005;
     scene.add(mainKeyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xdbeafe, 1.2);
+    const fillLight = new THREE.DirectionalLight(0xdbeafe, 1.3);
     fillLight.position.set(-10, 6, -8);
     scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    const rimLight = new THREE.DirectionalLight(0xffffff, 1.1);
     rimLight.position.set(0, 8, -12);
     scene.add(rimLight);
 
     // 6. Contact Shadow Ground Plane
-    const groundGeo = new THREE.PlaneGeometry(30, 30);
+    const groundGeo = new THREE.PlaneGeometry(32, 32);
     const groundCanvas = document.createElement('canvas');
     groundCanvas.width = 512;
     groundCanvas.height = 512;
     const gctx = groundCanvas.getContext('2d');
     if (gctx) {
       const grad = gctx.createRadialGradient(256, 256, 10, 256, 256, 240);
-      grad.addColorStop(0, 'rgba(15, 23, 42, 0.28)');
-      grad.addColorStop(0.35, 'rgba(30, 41, 59, 0.14)');
+      grad.addColorStop(0, 'rgba(15, 23, 42, 0.32)');
+      grad.addColorStop(0.35, 'rgba(30, 41, 59, 0.16)');
       grad.addColorStop(0.7, 'rgba(148, 163, 184, 0.05)');
       grad.addColorStop(1, 'rgba(248, 250, 252, 0)');
       gctx.fillStyle = grad;
@@ -218,7 +272,7 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
     const handleResize = () => {
       if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
       const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight || 520;
+      const h = containerRef.current.clientHeight || 460;
       cameraRef.current.aspect = w / h;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(w, h);
@@ -240,28 +294,23 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
       // Update 2D positions of 3D hotspots
       if (cameraRef.current && containerRef.current && aircraft) {
         const w = containerRef.current.clientWidth;
-        const h = containerRef.current.clientHeight || 520;
+        const h = containerRef.current.clientHeight || 460;
 
         const updated = aircraft.components.map((comp) => {
           const pos = new THREE.Vector3(...comp.hotspotPosition);
           pos.applyMatrix4(pivot.matrixWorld);
 
-          const camPos = cameraRef.current!.position;
-          const dist = pos.distanceTo(camPos);
-
           const projected = pos.clone().project(cameraRef.current!);
-
           const isBehind = projected.z > 1.0;
           const x = (projected.x * 0.5 + 0.5) * w;
           const y = (-(projected.y * 0.5) + 0.5) * h;
-
-          const inBounds = x >= 10 && x <= w - 10 && y >= 10 && y <= h - 10;
+          const inBounds = x >= 15 && x <= w - 15 && y >= 15 && y <= h - 15;
 
           return {
             component: comp,
             x,
             y,
-            visible: !isBehind && inBounds && dist < 25,
+            visible: !isBehind && inBounds,
           };
         });
 
@@ -300,7 +349,7 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
     }
   }, [controlMode]);
 
-  // Load / Switch Aircraft Model
+  // Load / Switch Aircraft Model (Centering and enlarged scale)
   useEffect(() => {
     const pivot = pivotGroupRef.current;
     if (!pivot) return;
@@ -317,7 +366,11 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
 
     // Camera initial framing
     if (cameraRef.current && controlsRef.current) {
-      cameraRef.current.position.set(...aircraft.modelConfig.initialCameraPosition);
+      cameraRef.current.position.set(
+        aircraft.modelConfig.initialCameraPosition[0] * 0.85,
+        aircraft.modelConfig.initialCameraPosition[1] * 0.85,
+        aircraft.modelConfig.initialCameraPosition[2] * 0.85
+      );
       controlsRef.current.target.set(...aircraft.modelConfig.initialTarget);
       controlsRef.current.update();
     }
@@ -332,7 +385,8 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
       box.getCenter(center);
 
       const maxDim = Math.max(size.x, size.y, size.z);
-      const targetSize = 6.8 * aircraft.modelConfig.scaleMultiplier;
+      // Enlarged target size to 10.4 so the aircraft fills the viewport with high presence
+      const targetSize = 10.4 * (aircraft.modelConfig.scaleMultiplier || 1.0);
       const scaleFactor = maxDim > 0 ? targetSize / maxDim : 1;
 
       modelGroup.scale.setScalar(scaleFactor);
@@ -378,68 +432,30 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
           if (xhr.total > 0) {
             const percent = Math.round((xhr.loaded / xhr.total) * 100);
             setLoadProgress(percent);
-          } else {
-            setLoadProgress((prev) => Math.min(prev + 15, 90));
           }
         },
-        (error) => {
-          console.error('Error loading Rafale GLB:', error);
+        (err) => {
+          console.error('Failed to load GLB model:', err);
           setLoading(false);
         }
       );
-    } else {
-      // Tejas OBJ
+    } else if (aircraft.modelFormat === 'obj') {
       const loader = new OBJLoader();
       loader.load(
         resolveModelUrl(aircraft.modelPath),
         (obj) => {
-          const airframeMaterial = new THREE.MeshStandardMaterial({
-            color: 0x7e8c9b,
-            metalness: 0.28,
-            roughness: 0.42,
-          });
-
-          const darkCompositeMaterial = new THREE.MeshStandardMaterial({
-            color: 0x333b45,
-            metalness: 0.4,
-            roughness: 0.35,
-          });
-
-          const canopyMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0x1e3a5f,
-            metalness: 0.2,
-            roughness: 0.08,
-            transmission: 0.55,
-            transparent: true,
-            opacity: 0.88,
-          });
-
           obj.traverse((child) => {
             if ((child as THREE.Mesh).isMesh) {
               const mesh = child as THREE.Mesh;
               mesh.castShadow = true;
               mesh.receiveShadow = true;
-
-              if (mesh.geometry) {
-                mesh.geometry.computeVertexNormals();
-              }
-
-              const name = (mesh.name || '').toLowerCase();
-              if (name.includes('glass') || name.includes('canopy') || name.includes('cockpit')) {
-                mesh.material = canopyMaterial;
-              } else if (
-                name.includes('engine') ||
-                name.includes('nozzle') ||
-                name.includes('tire') ||
-                name.includes('wheel')
-              ) {
-                mesh.material = darkCompositeMaterial;
-              } else {
-                mesh.material = airframeMaterial;
-              }
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x94a3b8,
+                metalness: 0.35,
+                roughness: 0.45,
+              });
             }
           });
-
           modelCache.set(cacheKey, obj);
           finalizeLoadedModel(obj.clone(true));
         },
@@ -447,89 +463,81 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
           if (xhr.total > 0) {
             const percent = Math.round((xhr.loaded / xhr.total) * 100);
             setLoadProgress(percent);
-          } else {
-            setLoadProgress((prev) => Math.min(prev + 10, 85));
           }
         },
-        (error) => {
-          console.error('Error loading Tejas OBJ:', error);
+        (err) => {
+          console.error('Failed to load OBJ model:', err);
           setLoading(false);
         }
       );
     }
   }, [aircraft]);
 
-  // Focus camera on selected component if clicked
-  useEffect(() => {
-    if (!selectedComponent || !pivotGroupRef.current || !cameraRef.current || !controlsRef.current)
-      return;
-    const targetPos = new THREE.Vector3(...selectedComponent.hotspotPosition);
-    targetPos.applyMatrix4(pivotGroupRef.current.matrixWorld);
-
-    controlsRef.current.target.lerp(targetPos, 0.4);
-    controlsRef.current.update();
-  }, [selectedComponent]);
+  // Color mapping helper for hotspot badges
+  const getHotspotColor = (component: AircraftComponentData) => {
+    if (component.status === 'Maintenance Required' || component.health < 70) {
+      return { dot: 'bg-red-500', ring: 'ring-red-400', badge: 'border-red-400/50' };
+    }
+    if (component.status === 'Monitor' || component.health < 85) {
+      return { dot: 'bg-amber-400', ring: 'ring-amber-400', badge: 'border-amber-400/50' };
+    }
+    if (component.category === 'landing' || component.category === 'electrical') {
+      return { dot: 'bg-blue-400', ring: 'ring-blue-400', badge: 'border-blue-400/50' };
+    }
+    return { dot: 'bg-emerald-400', ring: 'ring-emerald-400', badge: 'border-emerald-400/50' };
+  };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col overflow-hidden relative">
-      {/* Top Header of the 3D Viewer */}
-      <div className="px-6 pt-5 pb-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          {/* Aircraft ID & Status Header */}
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              {aircraft.name}
-            </h1>
-            <span className="text-sm font-bold font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-              {aircraft.code}
-            </span>
-            <span
-              className={`text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                aircraft.status === 'READY'
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : 'bg-amber-50 text-amber-700 border border-amber-200'
-              }`}
-            >
-              {aircraft.status}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">
-            {aircraft.fullName}
-          </p>
+    <div className="w-full flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)] overflow-hidden">
+      {/* Top Bar above 3D Viewport matching reference screenshot */}
+      <div className="px-4 py-2.5 bg-slate-50/70 border-b border-slate-200/80 flex items-center justify-between">
+        {/* View Mode Toggle: Aircraft View | System View */}
+        <div className="flex items-center gap-1 bg-slate-200/80 p-0.5 rounded-xl text-xs font-bold text-slate-700">
+          <button
+            onClick={() => handleViewModeChange('aircraft')}
+            className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+              viewMode === 'aircraft'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Aircraft View
+          </button>
+          <button
+            onClick={() => handleViewModeChange('system')}
+            className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+              viewMode === 'system'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            System View
+          </button>
         </div>
 
-        {/* Tabs: 3D View, Component Status, Maintenance, History */}
-        <div className="flex items-center gap-1 border-b border-transparent">
-          {[
-            { id: '3d', label: '3D View' },
-            { id: 'components', label: 'Component Status' },
-            { id: 'maintenance', label: 'Maintenance' },
-            { id: 'history', label: 'History' },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() =>
-                  onTabChange(tab.id as '3d' | 'components' | 'maintenance' | 'history')
-                }
-                className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all relative ${
-                  isActive
-                    ? 'text-blue-600 bg-blue-50/70 border border-blue-200/60 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        {/* Labels Toggle Switch */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-slate-600">Labels</span>
+          <button
+            onClick={toggleLabels}
+            className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
+              showLabels ? 'bg-blue-600' : 'bg-slate-300'
+            }`}
+            title="Toggle component hotspot labels"
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                showLabels ? 'translate-x-4' : 'translate-x-0'
+              }`}
+            />
+          </button>
         </div>
       </div>
 
       {/* Main 3D Canvas Area */}
       <div
         ref={containerRef}
-        className="relative w-full h-[520px] bg-gradient-to-b from-[#F8FAFC] via-[#F1F5F9] to-[#E2E8F0] overflow-hidden select-none cursor-grab active:cursor-grabbing"
+        className="relative w-full h-[460px] bg-gradient-to-b from-[#F8FAFC] via-[#F1F5F9] to-[#E2E8F0] overflow-hidden select-none cursor-grab active:cursor-grabbing"
       >
         <canvas ref={canvasRef} className="w-full h-full block" />
 
@@ -537,7 +545,7 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
         {loading && (
           <div className="absolute inset-0 bg-white/85 backdrop-blur-xs flex flex-col items-center justify-center z-20 transition-opacity">
             <div className="w-14 h-14 relative flex items-center justify-center">
-              <div className="w-full h-full rounded-full border-3 border-blue-100 border-t-blue-600 animate-spin"></div>
+              <div className="w-full h-full rounded-full border-3 border-blue-100 border-t-blue-600 animate-spin" />
               <Compass className="w-6 h-6 text-blue-600 absolute" />
             </div>
             <div className="mt-4 text-sm font-bold text-slate-800">
@@ -546,7 +554,6 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
             <p className="text-xs text-slate-500 mt-1 font-mono">
               {aircraft.name} ({aircraft.modelFormat.toUpperCase()}) — {loadProgress}%
             </p>
-            {/* Progress bar */}
             <div className="w-48 h-1.5 bg-slate-100 rounded-full overflow-hidden mt-3">
               <div
                 className="h-full bg-blue-600 rounded-full transition-all duration-300"
@@ -556,13 +563,61 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
           </div>
         )}
 
-        {/* 3D Hotspots Overlay */}
+        {/* Floating Tool Strip on Left Edge matching screenshot */}
+        <div className="absolute top-4 left-4 z-10 flex flex-col gap-1.5 bg-white/95 p-1 rounded-xl border border-slate-200/90 shadow-md backdrop-blur-xs">
+          <button
+            onClick={() => setControlMode('rotate')}
+            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+              controlMode === 'rotate' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+            title="Selection & Rotate Tool"
+          >
+            <MousePointer className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setPresetAngle('perspective')}
+            className="w-7 h-7 rounded-lg text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+            title="Hero Perspective View"
+          >
+            <Box className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={toggleWireframe}
+            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+              isWireframe ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+            title="Toggle Subsystem Wireframe Mode"
+          >
+            <Layers className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => {
+              if (cameraRef.current) {
+                cameraRef.current.position.multiplyScalar(0.9);
+                controlsRef.current?.update();
+              }
+            }}
+            className="w-7 h-7 rounded-lg text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+            title="Zoom In"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={resetCamera}
+            className="w-7 h-7 rounded-lg text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+            title="Reset Camera Framing"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* 3D Hotspot Tags Overlay */}
         {!loading &&
+          showLabels &&
           screenHotspots.map(({ component, x, y, visible }) => {
             if (!visible) return null;
             const isSelected = selectedComponent?.id === component.id;
-            const isWarning = component.status === 'Maintenance Required';
-            const isMonitor = component.status === 'Monitor';
+            const colors = getHotspotColor(component);
 
             return (
               <div
@@ -578,141 +633,19 @@ export const AircraftViewer: React.FC<AircraftViewerProps> = ({
                 }}
                 className="absolute z-10 -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer group transition-transform duration-75"
               >
-                {/* Hotspot Pin */}
-                <div className="flex items-center gap-1.5">
-                  <div className="relative flex items-center justify-center">
-                    <span
-                      className={`absolute w-6 h-6 rounded-full opacity-75 animate-ping ${
-                        isWarning
-                          ? 'bg-rose-400'
-                          : isMonitor
-                          ? 'bg-amber-400'
-                          : 'bg-blue-400'
-                      }`}
-                    />
-                    <div
-                      className={`w-4 h-4 rounded-full border-2 border-white shadow-md flex items-center justify-center transition-all ${
-                        isSelected
-                          ? 'ring-3 ring-blue-500 scale-125'
-                          : 'group-hover:scale-115'
-                      } ${
-                        isWarning
-                          ? 'bg-rose-600'
-                          : isMonitor
-                          ? 'bg-amber-500'
-                          : 'bg-blue-600'
-                      }`}
-                    >
-                      <div className="w-1.5 h-1.5 rounded-full bg-white shadow-xs" />
-                    </div>
-                  </div>
-
-                  {/* Hotspot Label Pill */}
-                  <div
-                    className={`px-2.5 py-0.5 rounded-md text-[11px] font-semibold tracking-tight shadow-md border backdrop-blur-md transition-all whitespace-nowrap ${
-                      isSelected
-                        ? 'bg-blue-600 text-white border-blue-700 shadow-blue-500/30'
-                        : 'bg-white/95 text-slate-800 border-slate-200/90 hover:bg-blue-50 hover:border-blue-300'
-                    }`}
-                  >
-                    {component.name}
-                  </div>
+                <div
+                  className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black shadow-lg backdrop-blur-md transition-all whitespace-nowrap cursor-pointer ${
+                    isSelected
+                      ? 'bg-blue-600 text-white border border-blue-400 ring-4 ring-blue-500/30 scale-105 z-20'
+                      : 'bg-[#0F172A]/90 hover:bg-[#0F172A] text-white border border-slate-700/80 hover:scale-105 z-10'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${colors.dot} shrink-0 animate-pulse`} />
+                  <span className="tracking-tight">{component.name}</span>
                 </div>
               </div>
             );
           })}
-
-        {/* Top-Right Quick Angle Selector */}
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-1 bg-white/90 backdrop-blur-md p-1 rounded-xl border border-slate-200 shadow-sm text-xs">
-          <button
-            onClick={() => setPresetAngle('perspective')}
-            className="px-2 py-1 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-slate-100 font-medium transition-colors"
-            title="Hero Isometric View"
-          >
-            Perspective
-          </button>
-          <button
-            onClick={() => setPresetAngle('top')}
-            className="px-2 py-1 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-slate-100 font-medium transition-colors"
-            title="Top Elevation"
-          >
-            Top
-          </button>
-          <button
-            onClick={() => setPresetAngle('side')}
-            className="px-2 py-1 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-slate-100 font-medium transition-colors"
-            title="Side Profile"
-          >
-            Side
-          </button>
-          <button
-            onClick={() => setPresetAngle('front')}
-            className="px-2 py-1 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-slate-100 font-medium transition-colors"
-            title="Front Radial"
-          >
-            Front
-          </button>
-        </div>
-
-        {/* Bottom Floating Control Bar */}
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-200/90 shadow-lg text-xs font-semibold text-slate-700">
-          <button
-            onClick={() => {
-              setControlMode('rotate');
-              setIsAutoRotating(!isAutoRotating);
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all ${
-              controlMode === 'rotate' || isAutoRotating
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'hover:bg-slate-100 text-slate-600'
-            }`}
-            title="Toggle 360 Turntable / Rotation"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Rotate</span>
-          </button>
-
-          <button
-            onClick={() => setControlMode(controlMode === 'pan' ? 'rotate' : 'pan')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all ${
-              controlMode === 'pan'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'hover:bg-slate-100 text-slate-600'
-            }`}
-            title="Pan Camera"
-          >
-            <Move className="w-3.5 h-3.5" />
-            <span>Pan</span>
-          </button>
-
-          <button
-            onClick={() => {
-              if (cameraRef.current) {
-                cameraRef.current.position.multiplyScalar(0.9);
-                controlsRef.current?.update();
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full hover:bg-slate-100 text-slate-600 transition-colors"
-            title="Zoom In"
-          >
-            <ZoomIn className="w-3.5 h-3.5" />
-            <span>Zoom</span>
-          </button>
-
-          <button
-            onClick={resetCamera}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full hover:bg-slate-100 text-slate-600 transition-colors"
-            title="Reset Camera to Default Angle"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Reset View</span>
-          </button>
-        </div>
-
-        {/* Hotspot count hint at bottom left */}
-        <div className="absolute bottom-4 left-4 z-10 px-2.5 py-1 bg-white/80 backdrop-blur-xs rounded-lg border border-slate-200/60 text-[10px] font-medium text-slate-500 pointer-events-none">
-          Click hotspot markers to inspect telemetry
-        </div>
       </div>
     </div>
   );
