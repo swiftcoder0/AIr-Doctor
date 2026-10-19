@@ -93,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const currentBase = baseList.find((b) => b.id === selectedBaseId) || baseList[0];
 
   return (
-    <aside className="w-64 h-[calc(100vh-3.5rem)] sticky top-14 flex flex-col justify-between py-4 px-3 select-none text-white z-20 shrink-0 overflow-hidden relative border-r border-slate-800/80 bg-[#0F172A]">
+    <aside className="w-64 h-screen flex flex-col justify-between py-4 px-3 select-none text-white z-20 shrink-0 overflow-hidden relative border-r border-slate-800/80 bg-[#0F172A]">
       {/* 
         Transparent Navy Blue Background with Aircraft on Tarmac matching reference image.
         Uses bundled asset to ensure zero 404s or server errors on any deployment.

@@ -167,37 +167,37 @@ export function App() {
   }
 
   return (
-    <div className="h-screen max-h-screen bg-[#F8FAFC] flex flex-col font-sans select-none text-slate-800 overflow-hidden">
-      {/* 1. Header with Base Selector, Search & Operations Banner */}
-      <Header
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+    <div className="h-screen max-h-screen bg-[#F8FAFC] flex font-sans select-none text-slate-800 overflow-hidden">
+      {/* 1. Left Navigation Sidebar extending full height (100vh) */}
+      <Sidebar
+        activeNav={activeNav}
+        onNavChange={setActiveNav}
         selectedBaseId={selectedBaseId}
         onSelectBase={handleSelectBase}
-        onNavigateToAssistant={() => setActiveNav('ai-assistant')}
         currentRole={currentRole}
-        onRoleChange={handleRoleChange}
-        onOpenSecurityModal={() => setIsSecurityModalOpen(true)}
-        currentDepartment={authSession ? {
-          id: authSession.departmentId,
-          name: authSession.departmentName,
-          officer: authSession.officer,
-          serviceId: authSession.serviceId,
-          role: authSession.role,
-        } : null}
-        onLogout={handleLogout}
+        pendingApprovalsCount={5}
       />
 
-      {/* 2. Main Layout Container: Sidebar + Active Section */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Navigation Sidebar matching Images 1 & 2 */}
-        <Sidebar
-          activeNav={activeNav}
-          onNavChange={setActiveNav}
+      {/* 2. Right Side: Clean Header + Scrollable Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header with Search, Live Render Indicator & Controls */}
+        <Header
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
           selectedBaseId={selectedBaseId}
           onSelectBase={handleSelectBase}
+          onNavigateToAssistant={() => setActiveNav('ai-assistant')}
           currentRole={currentRole}
-          pendingApprovalsCount={5}
+          onRoleChange={handleRoleChange}
+          onOpenSecurityModal={() => setIsSecurityModalOpen(true)}
+          currentDepartment={authSession ? {
+            id: authSession.departmentId,
+            name: authSession.departmentName,
+            officer: authSession.officer,
+            serviceId: authSession.serviceId,
+            role: authSession.role,
+          } : null}
+          onLogout={handleLogout}
         />
 
         {/* Scrollable Main Content Area */}

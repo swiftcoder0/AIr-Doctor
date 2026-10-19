@@ -48,20 +48,20 @@ export const Header: React.FC<HeaderProps> = ({
 
   const roleLabels: Record<UserRole, { name: string; title: string; badge: string; color: string }> = {
     Commander: {
-      name: currentDepartment?.role === 'Commander' ? currentDepartment.officer : 'Wing Cmdr. Aditya',
-      title: 'Commander — Fleet Command',
+      name: currentDepartment?.role === 'Commander' ? currentDepartment.officer.split('(')[0].trim() : 'Wing Cmdr. Aditya',
+      title: 'Fleet Commander',
       badge: 'COMMANDER',
       color: 'bg-blue-600 text-white',
     },
     Planner: {
-      name: currentDepartment?.role === 'Planner' ? currentDepartment.officer : 'Sqn Ldr. Vikram',
-      title: 'Planner — Verify & Simulate',
+      name: currentDepartment?.role === 'Planner' ? currentDepartment.officer.split('(')[0].trim() : 'Sqn Ldr. Vikram',
+      title: 'Chief Engineering Officer',
       badge: 'PLANNER',
       color: 'bg-emerald-600 text-white',
     },
     Viewer: {
-      name: currentDepartment?.role === 'Viewer' ? currentDepartment.officer : 'MWO R. Sharma',
-      title: 'Viewer — Read-Only',
+      name: currentDepartment?.role === 'Viewer' ? currentDepartment.officer.split('(')[0].trim() : 'MWO R. Sharma',
+      title: 'Hangar Controller',
       badge: 'VIEWER',
       color: 'bg-slate-600 text-white',
     },
@@ -69,91 +69,59 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="h-14 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between sticky top-0 z-30 select-none shadow-[0_1px_2px_rgba(0,0,0,0.02)] gap-4 text-slate-800">
-      {/* Search Bar */}
-      <div className="flex-1 max-w-md">
+      {/* 1. Clean Search Bar with Ctrl K hint */}
+      <div className="flex-1 max-w-lg">
         <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
-            <Search className="w-4 h-4" />
-          </div>
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-blue-600 transition-colors" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search aircraft, airbase, component or spare..."
-            className="w-full pl-10 pr-9 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all"
+            placeholder="Search base, aircraft, work order, or component..."
+            className="w-full pl-10 pr-20 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all"
           />
-          {searchQuery && (
-            <button
-              onClick={() => onSearchChange('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {searchQuery ? (
+              <button
+                onClick={() => onSearchChange('')}
+                className="text-slate-400 hover:text-slate-600 p-0.5"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <span className="text-[10px] font-mono text-slate-400 bg-slate-200/60 px-1.5 py-0.5 rounded font-semibold">
+                Ctrl K
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Center Persistent Synthetic Data Banner */}
-      <div className="hidden xl:flex items-center px-3 py-1 rounded-full bg-slate-100 border border-slate-200/80 text-[10px] font-mono font-bold text-slate-600 tracking-wider">
-        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 mr-2 animate-pulse" />
-        SYNTHETIC / UNCLASSIFIED DATA — SIMULATED DEMO WORKFLOW
-      </div>
-
-      {/* Right Controls: Connection Status, Security Shield, Notifications & RBAC Role Switcher */}
+      {/* 2. Right Controls: Simple Green/Red Live Indicator + Bell + User Persona */}
       <div className="flex items-center gap-3">
-        {/* Backend Connection Indicator */}
-        <div
+        {/* Simple Green/Red Backend Status Icon */}
+        <button
           onClick={() => api.checkBackendLiveness()}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all shadow-2xs ${
-            connStatus === 'connected'
-              ? 'bg-emerald-50/90 text-emerald-800 border-emerald-300'
-              : connStatus === 'fallback'
-              ? 'bg-amber-50/90 text-amber-800 border-amber-300'
-              : 'bg-slate-50 text-slate-600 border-slate-200'
-          }`}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50/80 hover:bg-slate-100 transition-colors cursor-pointer"
           title={
             connStatus === 'connected'
-              ? `Live API Connected (${API_BASE_URL}). Click to re-probe.`
-              : connStatus === 'fallback'
-              ? 'Backend API unreachable. Operating in local demo simulation mode. Click to retry connection.'
-              : 'Probing backend connection...'
+              ? `Live Render Backend Connected (${API_BASE_URL}). Click to re-probe.`
+              : 'Backend inactive / demo simulation mode. Click to retry connection.'
           }
         >
           <span
-            className={`w-2 h-2 rounded-full shrink-0 ${
+            className={`w-2 h-2 rounded-full ${
               connStatus === 'connected'
-                ? 'bg-emerald-500 animate-pulse'
-                : connStatus === 'fallback'
-                ? 'bg-amber-500'
-                : 'bg-slate-400 animate-ping'
+                ? 'bg-emerald-500 shadow-[0_0_6px_#10B981] animate-pulse'
+                : 'bg-red-500 shadow-[0_0_6px_#EF4444]'
             }`}
           />
-          <span className="font-mono text-[11px] font-bold hidden sm:inline">
-            {connStatus === 'connected'
-              ? 'API: Live (Render)'
-              : connStatus === 'fallback'
-              ? 'API: Demo Fallback'
-              : 'API: Connecting...'}
-          </span>
-        </div>
-
-        {/* Security Shield & MFA Pill */}
-        <button
-          onClick={onOpenSecurityModal}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50/80 hover:bg-blue-100 text-blue-900 transition-all text-xs font-bold shadow-2xs group"
-          title="Cybersecurity Matrix & TOTP MFA"
-        >
-          <div className="relative">
-            <ShieldCheck className="w-4 h-4 text-blue-600" />
-            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></span>
-          </div>
-          <span className="hidden sm:inline">Security Shield &amp; MFA</span>
-          <span className="text-[10px] bg-blue-600 text-white font-mono px-1.5 py-0.2 rounded font-bold ml-0.5">
-            MFA
+          <span className="text-[11px] font-bold text-slate-700">
+            {connStatus === 'connected' ? 'Live Data' : 'Demo Mode'}
           </span>
         </button>
 
-        {/* Notification Bell */}
+        {/* Notifications Bell */}
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
@@ -161,7 +129,9 @@ export const Header: React.FC<HeaderProps> = ({
             title="Operational Notifications"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-xs">
+              3
+            </span>
           </button>
 
           {showNotifications && (
@@ -190,50 +160,18 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Active Department Silo Profile Badge */}
-        {currentDepartment && (
-          <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200/90 text-xs shadow-2xs">
-            <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-            <div className="text-left">
-              <span className="font-bold text-slate-800 truncate block max-w-[170px]" title={currentDepartment.name}>
-                {currentDepartment.name}
-              </span>
-              <span className="text-[10px] text-slate-500 font-mono">
-                {currentDepartment.serviceId} • {currentDepartment.officer.split('(')[0].trim()}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Switch Department / Lock Button */}
-        {onLogout && (
-          <button
-            onClick={onLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-red-50/80 hover:bg-red-100 text-red-800 text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            title="Lock session & Switch Department Role"
-          >
-            <Lock className="w-3.5 h-3.5 text-red-600" />
-            <span className="hidden sm:inline">Switch / Lock</span>
-            <span className="sm:hidden">Lock</span>
-          </button>
-        )}
-
-        {/* RBAC Role Switcher & User Profile Dropdown */}
+        {/* User Profile Avatar Pill matching Reference Screenshot */}
         <div className="relative">
           <button
             onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-            className="flex items-center gap-2 pl-2 pr-2 py-1 border border-slate-200 hover:border-slate-300 rounded-xl bg-slate-50/70 hover:bg-slate-100/70 cursor-pointer transition-all"
-            title="Switch User Role & Access Clearance"
+            className="flex items-center gap-2.5 p-1 pr-3 rounded-full border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-slate-100/80 cursor-pointer transition-colors"
+            title="User Profile & Department Options"
           >
-            <div
-              className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shadow-2xs ${
-                roleLabels[currentRole].color
-              }`}
-            >
-              {currentRole[0]}
+            <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
+              A
             </div>
             <div className="text-left hidden md:block">
-              <div className="text-xs font-bold text-slate-800 leading-tight">
+              <div className="text-xs font-bold text-slate-900 leading-tight">
                 {roleLabels[currentRole].name}
               </div>
               <div className="text-[10px] text-slate-500 font-medium leading-tight">
@@ -246,7 +184,7 @@ export const Header: React.FC<HeaderProps> = ({
           {showRoleDropdown && (
             <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50 text-xs text-slate-800 space-y-1">
               <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                Switch Operational Persona
+                Active Persona
               </div>
 
               {(['Commander', 'Planner', 'Viewer'] as UserRole[]).map((r) => {
@@ -287,10 +225,10 @@ export const Header: React.FC<HeaderProps> = ({
                     setShowRoleDropdown(false);
                     onOpenSecurityModal();
                   }}
-                  className="w-full py-1 text-center text-[11px] font-semibold text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1 cursor-pointer"
+                  className="w-full py-1.5 text-center text-[11px] font-semibold text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1.5 cursor-pointer rounded-lg hover:bg-blue-50"
                 >
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  View Cybersecurity &amp; MFA Status
+                  <span>Security Shield &amp; MFA Status</span>
                 </button>
 
                 {onLogout && (
@@ -299,10 +237,10 @@ export const Header: React.FC<HeaderProps> = ({
                       setShowRoleDropdown(false);
                       onLogout();
                     }}
-                    className="w-full py-1 text-center text-[11px] font-bold text-red-600 hover:text-red-800 flex items-center justify-center gap-1 cursor-pointer rounded-lg hover:bg-red-50"
+                    className="w-full py-1.5 text-center text-[11px] font-bold text-red-600 hover:text-red-800 flex items-center justify-center gap-1.5 cursor-pointer rounded-lg hover:bg-red-50"
                   >
                     <Lock className="w-3.5 h-3.5" />
-                    Lock Session &amp; Switch Department
+                    <span>Switch Department / Lock</span>
                   </button>
                 )}
               </div>
