@@ -22,6 +22,13 @@ import {
   Truck,
   Warehouse,
   CalendarCheck,
+  Home,
+  UploadCloud,
+  ClipboardCheck,
+  Folder,
+  Calendar,
+  Clock,
+  ShoppingCart,
 } from 'lucide-react';
 import { BaseId, UserRole } from '../../types/aircraft';
 import { baseList } from '../../data/aircraftData';
@@ -138,69 +145,126 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
-  // 3. Technical Records & Quality Assurance Navigation (NO Command Center!)
+  // 3. Technical Records & Quality Assurance Navigation (Matches Reference UI exactly)
   const techRecordsNavItems: SidebarNavItem[] = [
     {
       id: 'tech-records',
-      label: 'Technical Records & QA',
-      sublabel: 'Logbooks & compliance',
-      icon: FileText,
+      label: 'Records Overview',
+      sublabel: 'Dashboard & stats',
+      icon: LayoutDashboard,
     },
     {
-      id: 'data-import',
-      label: 'Data Import & QA',
-      sublabel: 'CSV ingestion & parsing',
+      id: 'import-records',
+      label: 'Import Records',
+      sublabel: 'PDF / CSV ingestion',
+      icon: UploadCloud,
+    },
+    {
+      id: 'data-sources',
+      label: 'Data Sources',
+      sublabel: 'Connected digital systems',
       icon: Database,
+    },
+    {
+      id: 'aircraft-records',
+      label: 'Aircraft Records',
+      sublabel: 'Fleet tail logbooks',
+      icon: Plane,
+    },
+    {
+      id: 'maintenance-history',
+      label: 'Maintenance History',
+      sublabel: 'Servicing archives',
+      icon: Clock,
+    },
+    {
+      id: 'inspection-records',
+      label: 'Inspection Records',
+      sublabel: 'QA certificates',
+      icon: ClipboardCheck,
+    },
+    {
+      id: 'component-changes',
+      label: 'Component Changes',
+      sublabel: 'Parts replacement logs',
+      icon: Wrench,
+    },
+    {
+      id: 'previous-records',
+      label: 'Previous Records',
+      sublabel: 'Historical documentation',
+      icon: Folder,
     },
     {
       id: 'verify-queue',
       label: 'Verify-First Queue',
       sublabel: 'Flagged records audit',
-      icon: CheckSquare,
+      icon: ShieldCheck,
+      badge: 2,
     },
     {
-      id: 'audit-ledger',
-      label: 'Audit Ledger',
-      sublabel: 'Cryptographic chain',
-      icon: Lock,
+      id: 'audit-trail',
+      label: 'Audit Trail',
+      sublabel: 'Cryptographic ledger',
+      icon: Calendar,
     },
     {
       id: 'reports-tech',
-      label: 'QA Reports',
-      sublabel: 'Data trust & audits',
+      label: 'Reports',
+      sublabel: 'Quality & compliance',
       icon: BarChart2,
     },
   ];
 
-  // 4. Logistics & Spares Depot Navigation (NO Command Center!)
+  // 4. Logistics & Spares Navigation (Matches Reference UI exactly)
   const logisticsSparesNavItems: SidebarNavItem[] = [
     {
       id: 'logistics-spares',
-      label: 'Logistics & Spares',
+      label: 'Logistics Overview',
       sublabel: 'Depot & supply matrix',
       icon: Boxes,
     },
     {
-      id: 'resource-optimizer',
-      label: 'Resource Optimizer',
-      sublabel: '+1 What-If recovery',
-      icon: Sliders,
-    },
-    {
       id: 'spares-inventory',
-      label: 'Spares Inventory',
-      sublabel: 'Critical parts depot',
+      label: 'Spare Parts Inventory',
+      sublabel: 'Real-time base stock',
       icon: Package,
     },
     {
+      id: 'material-requests',
+      label: 'Material Requests',
+      sublabel: 'Squadron requisitions',
+      icon: ClipboardList,
+      badge: 12,
+    },
+    {
       id: 'transfers',
-      label: 'Cross-Base Transfers',
-      sublabel: 'Airbase transit logs',
+      label: 'Transfers',
+      sublabel: 'Cross-base transit',
       icon: Truck,
+      badge: 7,
+    },
+    {
+      id: 'procurement',
+      label: 'Procurement',
+      sublabel: 'OEM & vendor orders',
+      icon: ShoppingCart,
+    },
+    {
+      id: 'stock-movement',
+      label: 'Stock Movement History',
+      sublabel: 'Receipts & audit logs',
+      icon: Clock,
+    },
+    {
+      id: 'suppliers-sources',
+      label: 'Suppliers / Sources',
+      sublabel: 'IMMOLS & e-MMS status',
+      icon: Database,
     },
     {
       id: 'reports-logistics',
-      label: 'Logistics Reports',
+      label: 'Reports',
       sublabel: 'Supply chain analytics',
       icon: BarChart2,
     },
@@ -279,16 +343,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const isNavActive = (itemId: string): boolean => {
     if (activeNav === itemId) return true;
+    if (itemId === 'tech-records' && (activeNav === 'tech-records' || activeNav === 'records-overview')) return true;
+    if (itemId === 'import-records' && (activeNav === 'import-records' || activeNav === 'data-import')) return true;
+    if (itemId === 'audit-trail' && (activeNav === 'audit-trail' || activeNav === 'audit-ledger')) return true;
+    if (itemId === 'reports-tech' && (activeNav === 'reports-tech' || activeNav === 'reports')) return true;
     if (itemId === 'reports' && (activeNav === 'reports' || activeNav === 'reports-analytics')) return true;
     if (itemId === 'reports-health' && (activeNav === 'reports-health' || activeNav === 'reports')) return true;
-    if (itemId === 'reports-tech' && (activeNav === 'reports-tech' || activeNav === 'reports')) return true;
     if (itemId === 'reports-logistics' && (activeNav === 'reports-logistics' || activeNav === 'reports')) return true;
     if (itemId === 'reports-maintenance' && (activeNav === 'reports-maintenance' || activeNav === 'reports')) return true;
     if (itemId === 'aircraft-health' && (activeNav === 'aircraft-health' || activeNav === 'digital-twin')) return true;
-    if (itemId === 'data-import' && (activeNav === 'data-import' || activeNav === 'data-trust')) return true;
     if (itemId === 'resource-optimizer' && (activeNav === 'resource-optimizer' || activeNav === 'optimizer')) return true;
     if (itemId === 'work-orders' && (activeNav === 'work-orders' || activeNav === 'maintenance-scheduler')) return true;
     if (itemId === 'spares-inventory' && (activeNav === 'spares-inventory' || activeNav === 'maintenance-logistics' || activeNav === 'logistics')) return true;
+    if (itemId === 'logistics-spares' && (activeNav === 'logistics-spares' || activeNav === 'logistics-overview')) return true;
+    if (itemId === 'material-requests' && (activeNav === 'material-requests' || activeNav === 'requests')) return true;
+    if (itemId === 'stock-movement' && (activeNav === 'stock-movement' || activeNav === 'movement-history')) return true;
+    if (itemId === 'suppliers-sources' && (activeNav === 'suppliers-sources' || activeNav === 'sources')) return true;
     return false;
   };
 
@@ -376,6 +446,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Bottom Area: Operating Base Selector + IAF Inscription directly over tarmac visual */}
       <div className="relative z-10 space-y-3 pt-3 border-t border-slate-700/50 px-1">
+        {/* Selected Workspace badge for Technical Records & Quality matching reference image */}
+        {currentDepartmentId === 'tech-records' && (
+          <div>
+            <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1">
+              Selected Workspace
+            </div>
+            <div className="flex items-center justify-between px-2.5 py-1.5 bg-blue-600/25 border border-blue-500/40 rounded-xl text-xs font-bold text-blue-200 backdrop-blur-xs">
+              <div className="flex items-center gap-2 truncate">
+                <div className="w-4 h-4 rounded bg-blue-500 text-white flex items-center justify-center shrink-0">
+                  <FileText className="w-2.5 h-2.5" />
+                </div>
+                <span className="truncate text-[11px] font-semibold">Technical Records &amp; Quality</span>
+              </div>
+              <span className="text-slate-400 text-xs">•••</span>
+            </div>
+          </div>
+        )}
+
+        {currentDepartmentId === 'logistics-spares' && (
+          <div>
+            <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-1">
+              Selected Workspace
+            </div>
+            <div className="flex items-center justify-between px-2.5 py-1.5 bg-purple-600/25 border border-purple-500/40 rounded-xl text-xs font-bold text-purple-200 backdrop-blur-xs">
+              <div className="flex items-center gap-2 truncate">
+                <div className="w-4 h-4 rounded bg-purple-500 text-white flex items-center justify-center shrink-0">
+                  <Boxes className="w-2.5 h-2.5" />
+                </div>
+                <span className="truncate text-[11px] font-semibold">Logistics &amp; Spares Depot</span>
+              </div>
+              <span className="text-slate-400 text-xs">•••</span>
+            </div>
+          </div>
+        )}
+
         {/* Base Selector */}
         <div>
           <label className="text-[9px] text-slate-300 block font-bold uppercase tracking-wider mb-1 drop-shadow-xs">

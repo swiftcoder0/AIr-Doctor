@@ -51,6 +51,41 @@ from backend.schemas import (
     CommanderFleetMetrics,
     ApprovalActionRequest,
     ApprovalActionResponse,
+    TechnicalRecordItem,
+    TechnicalRecordStats,
+    PdfExtractResponse,
+    CsvMapAndValidateResponse,
+    CommitTechnicalRecordRequest,
+    LogisticsInventoryItem,
+    LogisticsKpiSummary,
+    MaterialRequestItem,
+    CreateMaterialRequest,
+    SparesTransferItem,
+    CreateSparesTransferRequest,
+    ProcurementOrderItem,
+    CreateProcurementOrderRequest,
+    StockMovementItem,
+    ReservePartRequest,
+)
+from backend.services.tech_records_service import (
+    list_technical_records,
+    get_technical_records_stats,
+    extract_pdf_maintenance_record,
+    map_and_validate_csv_excel,
+    commit_technical_record,
+)
+from backend.services.logistics_service import (
+    get_logistics_kpis,
+    list_inventory_items,
+    get_single_inventory_item,
+    reserve_inventory_part,
+    list_material_requests,
+    create_material_request,
+    list_spares_transfers,
+    create_spares_transfer,
+    list_procurement_orders,
+    create_procurement_order,
+    list_stock_movements,
 )
 from backend.services.fleet_service import (
     get_all_bases,
@@ -253,6 +288,78 @@ def list_import_history(base_id: Optional[str] = Query("all"), db: Session = Dep
         for b in batches
     ]
 
+# -------------------------------------------------------------
+# 2.5 Technical Records & Quality Endpoints
+# -------------------------------------------------------------
+@router.get("/tech-records", response_model=List[TechnicalRecordItem], tags=["Technical Records"])
+def get_tech_records(
+    aircraft_id: Optional[str] = Query(None),
+    record_type: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Retrieves technical records, inspections, and maintenance documentation."""
+    return list_technical_records(
+        db=db,
+        aircraft_id=aircraft_id,
+        record_type=record_type,
+        status=status,
+        search=search,
+    )
+
+@router.get("/tech-records/stats", response_model=TechnicalRecordStats, tags=["Technical Records"])
+def get_tech_records_kpis(db: Session = Depends(get_db)):
+    """Returns technical records KPI metrics (Total, Verified, Pending, Incomplete/Conflicting)."""
+    return get_technical_records_stats(db)
+
+@router.post("/tech-records/upload-pdf", response_model=PdfExtractResponse, tags=["Technical Records"])
+async def upload_pdf_record(
+    file: UploadFile = File(...),
+    aircraft_id: str = Form("Rafale R-01"),
+    record_type: str = Form("Inspection Record"),
+):
+    """Parses and extracts structured data from an uploaded PDF maintenance report."""
+    raw_bytes = await file.read()
+    if len(raw_bytes) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="File size exceeds maximum allowable limit (50 MB).")
+
+    return extract_pdf_maintenance_record(
+        pdf_bytes=raw_bytes,
+        filename=file.filename or "uploaded_report.pdf",
+        aircraft_id=aircraft_id,
+        record_type=record_type,
+    )
+
+@router.post("/tech-records/upload-csv", response_model=CsvMapAndValidateResponse, tags=["Technical Records"])
+async def upload_csv_record(
+    file: UploadFile = File(...),
+    aircraft_id: str = Form("Rafale R-01"),
+    record_type: str = Form("Maintenance History"),
+):
+    """Maps and validates an uploaded CSV/Excel technical records spreadsheet."""
+    raw_bytes = await file.read()
+    if len(raw_bytes) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="File size exceeds maximum allowable limit (50 MB).")
+
+    return map_and_validate_csv_excel(
+        file_bytes=raw_bytes,
+        filename=file.filename or "uploaded_records.csv",
+        aircraft_id=aircraft_id,
+        record_type=record_type,
+    )
+
+@router.post("/tech-records/commit", response_model=TechnicalRecordItem, tags=["Technical Records"])
+def commit_record(
+    request: CommitTechnicalRecordRequest,
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+    db: Session = Depends(get_db),
+):
+    """Commits a reviewed technical record to persistent DB and logs SHA-256 ledger block."""
+    verify_rbac_write_permission(x_airdoctor_role)
+    return commit_technical_record(db=db, req=request)
+
+
 @router.get("/trust/records", response_model=List[DataTrustRecord], tags=["Data Trust"])
 def list_trust_records(
     base_id: Optional[str] = Query("all"),
@@ -366,7 +473,119 @@ def reject_trust_record(
     return {"status": "ok", "record_id": record_id, "verification_status": "REJECTED"}
 
 # -------------------------------------------------------------
-# 4. Inventory, Technicians & Bays
+# 4. Logistics & Spares Department Endpoints
+# -------------------------------------------------------------
+@router.get("/logistics/kpis", response_model=LogisticsKpiSummary, tags=["Logistics & Spares"])
+def get_logistics_kpi_summary(db: Session = Depends(get_db)):
+    """Returns top inventory KPI summary metrics (Total, Low Stock, Pending Requests, Active Transfers)."""
+    return get_logistics_kpis(db)
+
+
+@router.get("/logistics/inventory", response_model=List[LogisticsInventoryItem], tags=["Logistics & Spares"])
+def get_logistics_inventory_items(
+    category: Optional[str] = Query(None),
+    aircraft: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
+    stock_status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Retrieves filtered spare parts inventory across operating airbases, depots, and forward stores."""
+    return list_inventory_items(
+        db=db,
+        category=category,
+        aircraft=aircraft,
+        location=location,
+        stock_status=stock_status,
+        search=search,
+    )
+
+
+@router.get("/logistics/inventory/{item_id}", response_model=LogisticsInventoryItem, tags=["Logistics & Spares"])
+def get_logistics_inventory_detail(item_id: str, db: Session = Depends(get_db)):
+    """Retrieves full specification, compatibility, and stock details for a single part."""
+    item = get_single_inventory_item(db=db, item_id=item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail=f"Part {item_id} not found in inventory registry.")
+    return item
+
+
+@router.post("/logistics/reserve", response_model=LogisticsInventoryItem, tags=["Logistics & Spares"])
+def reserve_part_stock(
+    req: ReservePartRequest,
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+    db: Session = Depends(get_db),
+):
+    """Reserves usable inventory for an aircraft maintenance task or work order."""
+    verify_rbac_write_permission(x_airdoctor_role)
+    try:
+        return reserve_inventory_part(db=db, req=req, actor=f"Authorized Officer ({x_airdoctor_role or 'Planner'})")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/logistics/requests", response_model=List[MaterialRequestItem], tags=["Logistics & Spares"])
+def get_material_requests_list(
+    status: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Retrieves all squadron and depot material requisitions."""
+    return list_material_requests(db=db, status=status)
+
+
+@router.post("/logistics/requests", response_model=MaterialRequestItem, tags=["Logistics & Spares"])
+def submit_material_request(
+    req: CreateMaterialRequest,
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+    db: Session = Depends(get_db),
+):
+    """Submits a new material request for an aircraft part or assembly."""
+    verify_rbac_write_permission(x_airdoctor_role)
+    return create_material_request(db=db, req=req, actor=f"Requisitioning Officer ({x_airdoctor_role or 'Planner'})")
+
+
+@router.get("/logistics/transfers", response_model=List[SparesTransferItem], tags=["Logistics & Spares"])
+def get_spares_transfers_list(db: Session = Depends(get_db)):
+    """Returns active and completed cross-airbase inventory transfers."""
+    return list_spares_transfers(db=db)
+
+
+@router.post("/logistics/transfers", response_model=SparesTransferItem, tags=["Logistics & Spares"])
+def submit_spares_transfer(
+    req: CreateSparesTransferRequest,
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+    db: Session = Depends(get_db),
+):
+    """Initiates a cross-base spare parts transfer between operating airbases."""
+    verify_rbac_write_permission(x_airdoctor_role)
+    return create_spares_transfer(db=db, req=req, actor=f"Dispatch Officer ({x_airdoctor_role or 'Planner'})")
+
+
+@router.get("/logistics/procurement", response_model=List[ProcurementOrderItem], tags=["Logistics & Spares"])
+def get_procurement_orders_list(db: Session = Depends(get_db)):
+    """Returns OEM and vendor supply orders."""
+    return list_procurement_orders(db=db)
+
+
+@router.post("/logistics/procurement", response_model=ProcurementOrderItem, tags=["Logistics & Spares"])
+def submit_procurement_order(
+    req: CreateProcurementOrderRequest,
+    x_airdoctor_role: Optional[str] = Header(None, alias="X-AirDoctor-Role"),
+    db: Session = Depends(get_db),
+):
+    """Submits a procurement requisition to approved aerospace vendors (e.g. HAL / OEM)."""
+    verify_rbac_write_permission(x_airdoctor_role)
+    return create_procurement_order(db=db, req=req, actor=f"Procurement Officer ({x_airdoctor_role or 'Planner'})")
+
+
+@router.get("/logistics/movements", response_model=List[StockMovementItem], tags=["Logistics & Spares"])
+def get_stock_movements_history(db: Session = Depends(get_db)):
+    """Returns full chronological audit log of inventory receipts, reservations, dispatches, and returns."""
+    return list_stock_movements(db=db)
+
+
+# -------------------------------------------------------------
+# 4.1 Legacy Inventory, Technicians & Bays
 # -------------------------------------------------------------
 @router.get("/inventory", response_model=List[SparePart], tags=["Logistics"])
 def get_inventory(base_id: Optional[str] = Query("all"), db: Session = Depends(get_db)):

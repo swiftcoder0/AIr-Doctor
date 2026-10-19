@@ -567,5 +567,266 @@ export interface ApprovalActionResponse {
   ledger_hash: string;
 }
 
+// -------------------------------------------------------------
+// Technical Records & Quality Interfaces
+// -------------------------------------------------------------
+export type TechnicalRecordStatus = 'Verified' | 'Pending' | 'Incomplete' | 'Rejected';
+
+export type TechnicalRecordType =
+  | 'Maintenance History'
+  | 'Inspection Record'
+  | 'Component Change'
+  | 'Fault / Repair Report'
+  | 'Usage / Flight Data'
+  | 'Airworthiness Directive (AD/SB)'
+  | 'Other Technical Record';
+
+export interface TechnicalRecordItem {
+  id: string;
+  aircraft_id: string;
+  aircraft_model: string;
+  record_type: string;
+  date: string;
+  component?: string;
+  source: string;
+  uploaded_by: string;
+  status: TechnicalRecordStatus;
+  trust_grade: TrustGrade;
+  finding?: string;
+  work_performed?: string;
+  parts_replaced?: string;
+  flight_hours?: string;
+  document_name?: string;
+  document_type?: 'pdf' | 'csv' | 'excel' | 'digital';
+  raw_extracted?: Record<string, any>;
+  validation_issues?: string[];
+  confidence_score?: number;
+  created_at?: string;
+  verified_at?: string | null;
+  verified_by?: string | null;
+  base_id?: BaseId;
+}
+
+export interface TechnicalRecordStats {
+  total_records: number;
+  verified_records: number;
+  pending_verification: number;
+  incomplete_conflicting: number;
+}
+
+export interface PdfExtractResponse {
+  success: boolean;
+  filename: string;
+  aircraft_id: string;
+  record_type: string;
+  is_scanned: boolean;
+  page_count: number;
+  extracted_text_preview: string;
+  extracted_fields: {
+    aircraft_id?: string;
+    date?: string;
+    component?: string;
+    finding?: string;
+    work_performed?: string;
+    parts_replaced?: string;
+    uploaded_by?: string;
+    flight_hours?: string;
+    [key: string]: any;
+  };
+  confidence_score: number;
+  validation_issues: string[];
+  status: string;
+}
+
+export interface CsvColumnMapping {
+  source_column: string;
+  target_field: string;
+  confidence: number;
+  is_unknown: boolean;
+}
+
+export interface CsvMapAndValidateResponse {
+  success: boolean;
+  filename: string;
+  aircraft_id: string;
+  record_type: string;
+  total_rows: number;
+  valid_rows: number;
+  warning_rows: number;
+  rejected_rows: number;
+  column_mappings: CsvColumnMapping[];
+  unknown_columns: string[];
+  preview_rows: Record<string, any>[];
+  validation_report: string[];
+  can_commit: boolean;
+}
+
+export interface CommitTechnicalRecordRequest {
+  aircraft_id: string;
+  record_type: string;
+  date: string;
+  component?: string;
+  source: string;
+  uploaded_by?: string;
+  finding?: string;
+  work_performed?: string;
+  parts_replaced?: string;
+  flight_hours?: string;
+  document_name?: string;
+  document_type?: string;
+  status?: string;
+  confidence_score?: number;
+  raw_extracted?: Record<string, any>;
+  validation_issues?: string[];
+  reviewer?: string;
+  notes?: string;
+}
+
+// -------------------------------------------------------------
+// Logistics & Spares Types
+// -------------------------------------------------------------
+export interface LogisticsInventoryItem {
+  id: string;
+  part_number: string;
+  description: string;
+  applicable_aircraft: string;
+  category: string;
+  location: string;
+  usable_qty: number;
+  reserved_qty: number;
+  min_stock: number;
+  status: 'In Stock' | 'Low Stock' | 'Critically Low' | 'Out of Stock';
+  nsn_oem: string;
+  condition: string;
+  last_inspection: string;
+  unit_cost_inr: number;
+  compatibility: string[];
+  image_url?: string;
+  base_id: string;
+}
+
+export interface LogisticsKpiSummary {
+  total_inventory_items: number;
+  low_stock_items: number;
+  pending_requests: number;
+  transfers_in_progress: number;
+  approved_orders: number;
+  is_demo_data: boolean;
+}
+
+export interface MaterialRequestItem {
+  id: string;
+  aircraft: string;
+  part_number: string;
+  part_name: string;
+  quantity: number;
+  status: 'Approved' | 'Pending' | 'Urgent' | 'In Review' | 'Completed' | 'Rejected';
+  required_by: string;
+  request_date: string;
+  priority: 'Urgent' | 'High' | 'Medium' | 'Low';
+  destination_base: string;
+  requester: string;
+  linked_work_order_id?: string;
+  notes?: string;
+}
+
+export interface CreateMaterialRequest {
+  aircraft: string;
+  part_number: string;
+  part_name: string;
+  quantity: number;
+  required_by: string;
+  priority?: string;
+  destination_base: string;
+  requester?: string;
+  linked_work_order_id?: string;
+  notes?: string;
+}
+
+export interface SparesTransferItem {
+  id: string;
+  part_number: string;
+  part_name: string;
+  quantity: number;
+  source_location: string;
+  destination_location: string;
+  status: 'In Transit' | 'Requested' | 'Approved' | 'Delivered' | 'Cancelled';
+  eta: string;
+  request_date: string;
+  transport_mode: string;
+  linked_request_id?: string;
+  approved_by?: string;
+}
+
+export interface CreateSparesTransferRequest {
+  part_number: string;
+  part_name: string;
+  quantity: number;
+  source_location: string;
+  destination_location: string;
+  transport_mode?: string;
+  linked_request_id?: string;
+  notes?: string;
+}
+
+export interface ProcurementOrderItem {
+  id: string;
+  part_number: string;
+  part_name: string;
+  supplier: string;
+  quantity: number;
+  status: 'On Order' | 'Pending MoD Sanction' | 'Delivered' | 'In Production';
+  lead_time: string;
+  order_date: string;
+  contract_ref: string;
+  est_total_cost: string;
+}
+
+export interface CreateProcurementOrderRequest {
+  part_number: string;
+  part_name: string;
+  supplier: string;
+  quantity: number;
+  contract_ref?: string;
+  est_total_cost?: string;
+}
+
+export interface StockMovementItem {
+  id: string;
+  timestamp: string;
+  part_number: string;
+  part_name: string;
+  movement_type: 'RESERVATION' | 'RECEIPT' | 'ISSUE' | 'TRANSFER_DISPATCH' | 'RETURN';
+  quantity: number;
+  origin: string;
+  destination: string;
+  responsible_user: string;
+  linked_reference?: string;
+  notes?: string;
+}
+
+export interface ReservePartRequest {
+  inventory_id: string;
+  part_number: string;
+  quantity: number;
+  linked_request_or_wo?: string;
+  notes?: string;
+}
+
+export interface SupplyOptionItem {
+  id: string;
+  title: string;
+  type: 'transfer' | 'depot' | 'oem';
+  source_name: string;
+  available_qty: number;
+  reserved_qty: number;
+  condition: string;
+  eta_or_lead_time: string;
+  details: string;
+  badge?: string;
+}
+
+
+
 
 

@@ -571,3 +571,230 @@ class ApprovalActionResponse(BaseModel):
     ledger_entry_id: str
     ledger_hash: str
 
+
+# -------------------------------------------------------------
+# Technical Records & Quality Schemas
+# -------------------------------------------------------------
+class TechnicalRecordItem(BaseModel):
+    id: str
+    aircraft_id: str
+    aircraft_model: str = "Rafale"
+    record_type: str
+    date: str
+    component: Optional[str] = None
+    source: str = "PDF Import"
+    uploaded_by: str = "Cpl. Arjun Singh"
+    status: str = "Verified"
+    trust_grade: str = "A"
+    finding: Optional[str] = ""
+    work_performed: Optional[str] = ""
+    parts_replaced: Optional[str] = ""
+    flight_hours: Optional[str] = ""
+    document_name: Optional[str] = ""
+    document_type: Optional[str] = "pdf"
+    raw_extracted: Optional[Dict[str, Any]] = None
+    validation_issues: Optional[List[str]] = None
+    confidence_score: Optional[int] = 95
+    created_at: Optional[str] = None
+    verified_at: Optional[str] = None
+    verified_by: Optional[str] = None
+    base_id: Optional[str] = "base-alpha"
+
+
+class TechnicalRecordStats(BaseModel):
+    total_records: int
+    verified_records: int
+    pending_verification: int
+    incomplete_conflicting: int
+
+
+class PdfExtractResponse(BaseModel):
+    success: bool
+    filename: str
+    aircraft_id: str
+    record_type: str
+    is_scanned: bool
+    page_count: int
+    extracted_text_preview: str
+    extracted_fields: Dict[str, Any]
+    confidence_score: int
+    validation_issues: List[str]
+    status: str
+
+
+class CsvColumnMapping(BaseModel):
+    source_column: str
+    target_field: str
+    confidence: float
+    is_unknown: bool = False
+
+
+class CsvMapAndValidateResponse(BaseModel):
+    success: bool
+    filename: str
+    aircraft_id: str
+    record_type: str
+    total_rows: int
+    valid_rows: int
+    warning_rows: int
+    rejected_rows: int
+    column_mappings: List[CsvColumnMapping]
+    unknown_columns: List[str]
+    preview_rows: List[Dict[str, Any]]
+    validation_report: List[str]
+    can_commit: bool
+
+
+class CommitTechnicalRecordRequest(BaseModel):
+    aircraft_id: str
+    record_type: str
+    date: str
+    component: Optional[str] = None
+    source: str = "PDF Import"
+    uploaded_by: Optional[str] = "Sqn Ldr. Vikram"
+    finding: Optional[str] = None
+    work_performed: Optional[str] = None
+    parts_replaced: Optional[str] = None
+    flight_hours: Optional[str] = None
+    document_name: Optional[str] = None
+    document_type: Optional[str] = "pdf"
+    status: Optional[str] = "Verified"
+    confidence_score: Optional[int] = 95
+    raw_extracted: Optional[Dict[str, Any]] = None
+    validation_issues: Optional[List[str]] = None
+    reviewer: Optional[str] = "Flt Lt. Meera (QA Officer)"
+    notes: Optional[str] = None
+
+
+# -------------------------------------------------------------
+# Logistics & Spares Schemas
+# -------------------------------------------------------------
+class LogisticsInventoryItem(BaseModel):
+    id: str
+    part_number: str
+    description: str
+    applicable_aircraft: str
+    category: str
+    location: str
+    usable_qty: int
+    reserved_qty: int
+    min_stock: int
+    status: str
+    nsn_oem: str
+    condition: str
+    last_inspection: str
+    unit_cost_inr: int
+    compatibility: List[str] = []
+    image_url: Optional[str] = None
+    base_id: str
+
+
+class LogisticsKpiSummary(BaseModel):
+    total_inventory_items: int
+    low_stock_items: int
+    pending_requests: int
+    transfers_in_progress: int
+    approved_orders: int
+    is_demo_data: bool = True
+
+
+class MaterialRequestItem(BaseModel):
+    id: str
+    aircraft: str
+    part_number: str
+    part_name: str
+    quantity: int
+    status: str
+    required_by: str
+    request_date: str
+    priority: str
+    destination_base: str
+    requester: str
+    linked_work_order_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CreateMaterialRequest(BaseModel):
+    aircraft: str
+    part_number: str
+    part_name: str
+    quantity: int = 1
+    required_by: str
+    priority: str = "Medium"
+    destination_base: str
+    requester: Optional[str] = "Sqn Ldr. Line Officer"
+    linked_work_order_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SparesTransferItem(BaseModel):
+    id: str
+    part_number: str
+    part_name: str
+    quantity: int
+    source_location: str
+    destination_location: str
+    status: str
+    eta: str
+    request_date: str
+    transport_mode: str
+    linked_request_id: Optional[str] = None
+    approved_by: Optional[str] = None
+
+
+class CreateSparesTransferRequest(BaseModel):
+    part_number: str
+    part_name: str
+    quantity: int = 1
+    source_location: str
+    destination_location: str
+    transport_mode: Optional[str] = "IAF Air Transit (C-130J)"
+    linked_request_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ProcurementOrderItem(BaseModel):
+    id: str
+    part_number: str
+    part_name: str
+    supplier: str
+    quantity: int
+    status: str
+    lead_time: str
+    order_date: str
+    contract_ref: str
+    est_total_cost: str
+
+
+class CreateProcurementOrderRequest(BaseModel):
+    part_number: str
+    part_name: str
+    supplier: str
+    quantity: int = 1
+    contract_ref: Optional[str] = None
+    est_total_cost: Optional[str] = None
+
+
+class StockMovementItem(BaseModel):
+    id: str
+    timestamp: str
+    part_number: str
+    part_name: str
+    movement_type: str
+    quantity: int
+    origin: str
+    destination: str
+    responsible_user: str
+    linked_reference: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ReservePartRequest(BaseModel):
+    inventory_id: str
+    part_number: str
+    quantity: int = 1
+    linked_request_or_wo: Optional[str] = None
+    notes: Optional[str] = None
+
+
+

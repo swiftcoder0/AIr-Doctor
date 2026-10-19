@@ -14,6 +14,8 @@ import { BaseOperationsView } from './components/CommandCenter/BaseOperationsVie
 import { FleetOverviewView } from './components/CommandCenter/FleetOverviewView';
 import { CommandApprovalsView } from './components/CommandCenter/CommandApprovalsView';
 import { StrategicInsightsView } from './components/CommandCenter/StrategicInsightsView';
+import { TechRecordsView } from './components/TechRecords/TechRecordsView';
+import { LogisticsDashboardView } from './components/Logistics/LogisticsDashboardView';
 import { DepartmentSetupWorkspaceView } from './components/DepartmentWorkspace/DepartmentSetupWorkspaceView';
 import { AccessRestrictedView } from './components/Security/AccessRestrictedView';
 import { BaseId, AircraftData, UserRole, VerifyDepartmentTotpResponse } from './types/aircraft';
@@ -78,11 +80,20 @@ export const DEPARTMENT_ALLOWED_ROUTES: Record<string, string[]> = {
   ],
   'tech-records': [
     'tech-records',
+    'records-overview',
+    'import-records',
+    'data-sources',
+    'aircraft-records',
+    'maintenance-history',
+    'inspection-records',
+    'component-changes',
+    'previous-records',
+    'verify-queue',
+    'audit-trail',
+    'reports-tech',
     'data-trust',
     'data-import',
-    'verify-queue',
     'audit-ledger',
-    'reports-tech',
     'reports',
     'reports-analytics',
     'reports-ledger',
@@ -90,12 +101,17 @@ export const DEPARTMENT_ALLOWED_ROUTES: Record<string, string[]> = {
   ],
   'logistics-spares': [
     'logistics-spares',
+    'logistics-overview',
+    'spares-inventory',
+    'material-requests',
+    'transfers',
+    'procurement',
+    'stock-movement',
+    'suppliers-sources',
     'resource-optimizer',
     'optimizer',
-    'spares-inventory',
     'maintenance-logistics',
     'logistics',
-    'transfers',
     'reports-logistics',
     'reports',
     'reports-analytics',
@@ -397,21 +413,42 @@ export function App() {
                 />
               )}
 
-              {/* Department Setup Workspaces for Technical Records, Logistics, Maintenance Agency */}
-              {activeNav === 'tech-records' && (
-                <DepartmentSetupWorkspaceView
-                  departmentId="tech-records"
+              {/* PAGE 3: Technical Records & Quality Workspace */}
+              {(activeNav === 'tech-records' ||
+                activeNav === 'records-overview' ||
+                activeNav === 'import-records' ||
+                activeNav === 'data-sources' ||
+                activeNav === 'aircraft-records' ||
+                activeNav === 'maintenance-history' ||
+                activeNav === 'inspection-records' ||
+                activeNav === 'component-changes' ||
+                activeNav === 'previous-records' ||
+                activeNav === 'verify-queue' ||
+                activeNav === 'audit-trail') && (
+                <TechRecordsView
+                  activeNav={activeNav}
                   onNavigate={handleNavChange}
+                  onLogDecision={handleLogDecisionCallback}
                 />
               )}
 
-              {activeNav === 'logistics-spares' && (
-                <DepartmentSetupWorkspaceView
-                  departmentId="logistics-spares"
+              {/* PAGE 4: Logistics & Spares Workspace */}
+              {(activeNav === 'logistics-spares' ||
+                activeNav === 'logistics-overview' ||
+                activeNav === 'spares-inventory' ||
+                activeNav === 'material-requests' ||
+                activeNav === 'transfers' ||
+                activeNav === 'procurement' ||
+                activeNav === 'stock-movement' ||
+                activeNav === 'suppliers-sources') && (
+                <LogisticsDashboardView
+                  activeNav={activeNav}
                   onNavigate={handleNavChange}
+                  onLogDecision={handleLogDecisionCallback}
                 />
               )}
 
+              {/* Department Setup Workspace for Maintenance Agency */}
               {activeNav === 'maintenance-agency' && (
                 <DepartmentSetupWorkspaceView
                   departmentId="maintenance-agency"
@@ -419,8 +456,8 @@ export function App() {
                 />
               )}
 
-              {/* Technical Records Tools: Data Import, Trust Records & Verification */}
-              {(activeNav === 'data-import' || activeNav === 'data-trust' || activeNav === 'verify-queue') && (
+              {/* Legacy Technical Records Tools: Data Import, Trust Records */}
+              {(activeNav === 'data-import' || activeNav === 'data-trust') && (
                 <DataTrustView
                   selectedBaseId={selectedBaseId}
                   onSelectBase={handleSelectBase}
@@ -428,11 +465,8 @@ export function App() {
                 />
               )}
 
-              {/* Logistics Tools: Spares Inventory & Transfers */}
-              {(activeNav === 'spares-inventory' ||
-                activeNav === 'maintenance-logistics' ||
-                activeNav === 'logistics' ||
-                activeNav === 'transfers') && (
+              {/* Legacy Maintenance Logistics View (for other departments) */}
+              {(activeNav === 'maintenance-logistics' || activeNav === 'logistics') && (
                 <LogisticsView
                   selectedBaseId={selectedBaseId}
                   onSelectBase={handleSelectBase}

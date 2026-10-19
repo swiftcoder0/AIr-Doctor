@@ -33,6 +33,12 @@ import {
   CommanderFleetMetrics,
   ApprovalActionRequest,
   ApprovalActionResponse,
+  LogisticsInventoryItem,
+  LogisticsKpiSummary,
+  MaterialRequestItem,
+  SparesTransferItem,
+  ProcurementOrderItem,
+  StockMovementItem,
 } from '../types/aircraft';
 import {
   baseList,
@@ -1626,6 +1632,752 @@ export const mockAirDoctorService = {
       ledger_entry_id: ledgerId,
       ledger_hash: ledgerHash,
     };
+  },
+
+  // -------------------------------------------------------------
+  // Technical Records & Quality (SIH MoD Logbooks)
+  // -------------------------------------------------------------
+  _inMemoryTechRecords: [
+    {
+      id: 'REC-2026-1048',
+      aircraft_id: 'Rafale R-01',
+      aircraft_model: 'Rafale',
+      record_type: 'Inspection Record',
+      date: '18 Oct 2026',
+      component: 'Engine (M88)',
+      source: 'PDF Import',
+      uploaded_by: 'Cpl. Arjun Singh',
+      status: 'Verified',
+      trust_grade: 'A',
+      finding: 'HP turbine blade leading edge shows initial thermal oxidation layer; within acceptable OEM tolerances.',
+      work_performed: 'Borescope inspection of HP turbine nozzle guide vanes (NGVs) and combustion chamber liner.',
+      parts_replaced: 'None (Scheduled 100h inspection sign-off)',
+      flight_hours: '1,248 h',
+      document_name: 'Rafale_R01_Engine_M88_Borescope_18Oct2026.pdf',
+      document_type: 'pdf',
+      confidence_score: 98,
+      base_id: 'base-alpha',
+      validation_issues: [],
+      verified_by: 'Flt Lt. Meera (QA Officer)',
+      verified_at: '2026-10-18T10:30:00Z',
+    },
+    {
+      id: 'REC-2026-1047',
+      aircraft_id: 'Tejas T-04',
+      aircraft_model: 'Tejas',
+      record_type: 'Fault / Repair Report',
+      date: '17 Oct 2026',
+      component: 'Hydraulic System',
+      source: 'CSV Import',
+      uploaded_by: 'Fg Off. Patel',
+      status: 'Pending',
+      trust_grade: 'B',
+      finding: 'Return line pressure dropped to 82 bar during pre-flight spool up (normal operational envelope 180-210 bar).',
+      work_performed: 'Isolation check of secondary hydraulic manifold valve; actuator seals flagged for replacement.',
+      parts_replaced: 'Awaiting Hydraulic Pump Kit HP-9042 from Depot',
+      flight_hours: '840 h',
+      document_name: 'Tejas_T04_Hydraulics_Telemetry_17Oct2026.csv',
+      document_type: 'csv',
+      confidence_score: 91,
+      base_id: 'base-bravo',
+      validation_issues: ['Pending spare allocation verification', 'Sign-off signature missing second officer countersign'],
+      verified_by: null,
+      verified_at: null,
+    },
+    {
+      id: 'REC-2026-1046',
+      aircraft_id: 'MiG-21 M-12',
+      aircraft_model: 'MiG-21',
+      record_type: 'Component Change',
+      date: '16 Oct 2026',
+      component: 'Fuel System',
+      source: 'Digital Import',
+      uploaded_by: 'System (Auto)',
+      status: 'Verified',
+      trust_grade: 'A',
+      finding: 'Scheduled life expiry reached for high-pressure fuel booster filter cartridge assembly.',
+      work_performed: 'Replaced booster pump filter element; performed pressure leak test under 4.2 bar crossfeed.',
+      parts_replaced: 'Part #FP-201-B (Fuel Filter Assembly)',
+      flight_hours: '2,150 h',
+      document_name: 'HUMS_Telemetry_AutoSync_Batch_4019.json',
+      document_type: 'digital',
+      confidence_score: 99,
+      base_id: 'base-alpha',
+      validation_issues: [],
+      verified_by: 'MWO R. Sharma (Hangar Controller)',
+      verified_at: '2026-10-16T14:15:00Z',
+    },
+    {
+      id: 'REC-2026-1045',
+      aircraft_id: 'Rafale R-01',
+      aircraft_model: 'Rafale',
+      record_type: 'Maintenance History',
+      date: '15 Oct 2026',
+      component: 'Landing Gear',
+      source: 'PDF Import',
+      uploaded_by: 'Sgt. Mehta',
+      status: 'Incomplete',
+      trust_grade: 'C',
+      finding: 'Nose landing gear nitrogen strut damping coefficient lower than nominal baseline.',
+      work_performed: 'Nitrogen recharge performed; pressure gauge calibration certificate expired on paper sheet.',
+      parts_replaced: 'O-Ring Seal #NG-44',
+      flight_hours: '1,242 h',
+      document_name: 'Scanned_Logsheet_LG_Strut_Ambala.pdf',
+      document_type: 'pdf',
+      confidence_score: 72,
+      base_id: 'base-alpha',
+      validation_issues: ['Calibration certificate date ambiguous on scan', 'Missing technician badge number'],
+      verified_by: null,
+      verified_at: null,
+    },
+    {
+      id: 'REC-2026-1044',
+      aircraft_id: 'Tejas T-04',
+      aircraft_model: 'Tejas',
+      record_type: 'Inspection Record',
+      date: '14 Oct 2026',
+      component: 'Avionics',
+      source: 'CSV Import',
+      uploaded_by: 'Lt. Rao',
+      status: 'Verified',
+      trust_grade: 'A',
+      finding: 'EL/M-2052 radar T/R module array built-in test completed with 100% transmit elements operational.',
+      work_performed: 'Firmware integrity hash check and bus continuity calibration across MIL-STD-1553B bus.',
+      parts_replaced: 'None',
+      flight_hours: '835 h',
+      document_name: 'Avionics_QA_Batch_1044.csv',
+      document_type: 'csv',
+      confidence_score: 96,
+      base_id: 'base-bravo',
+      validation_issues: [],
+      verified_by: 'Flt Lt. Meera (QA Officer)',
+      verified_at: '2026-10-14T16:00:00Z',
+    },
+  ],
+
+  getTechnicalRecords(params?: { aircraft_id?: string; record_type?: string; status?: string; search?: string }) {
+    let list = [...this._inMemoryTechRecords];
+    if (params?.aircraft_id && params.aircraft_id !== 'all') {
+      const a = params.aircraft_id.toLowerCase();
+      list = list.filter((r) => r.aircraft_id.toLowerCase().includes(a) || r.aircraft_model.toLowerCase().includes(a));
+    }
+    if (params?.record_type && params.record_type !== 'All Records' && params.record_type !== 'all') {
+      list = list.filter((r) => r.record_type.toLowerCase().includes(params.record_type!.toLowerCase()));
+    }
+    if (params?.status && params.status !== 'all') {
+      list = list.filter((r) => r.status.toLowerCase().startsWith(params.status!.toLowerCase()));
+    }
+    if (params?.search && params.search.trim()) {
+      const term = params.search.toLowerCase().trim();
+      list = list.filter(
+        (r) =>
+          r.id.toLowerCase().includes(term) ||
+          r.aircraft_id.toLowerCase().includes(term) ||
+          (r.component && r.component.toLowerCase().includes(term)) ||
+          r.finding.toLowerCase().includes(term) ||
+          r.uploaded_by.toLowerCase().includes(term)
+      );
+    }
+    return list;
+  },
+
+  getTechnicalRecordsStats() {
+    return {
+      total_records: 12468 + (this._inMemoryTechRecords.length - 5),
+      verified_records: 9842,
+      pending_verification: 1924,
+      incomplete_conflicting: 702,
+    };
+  },
+
+  simulatePdfExtraction(filename: string, aircraftId: string, recordType: string) {
+    const isRafale = aircraftId.toLowerCase().includes('rafale');
+    const comp = isRafale ? 'Engine (M88)' : 'Hydraulic System';
+    return {
+      success: true,
+      filename,
+      aircraft_id: aircraftId,
+      record_type: recordType,
+      is_scanned: false,
+      page_count: 2,
+      extracted_text_preview: `INDIAN AIR FORCE - TECHNICAL LOGBOOK ENTRY\nAIRCRAFT IDENTIFIER: ${aircraftId}\nRECORD TYPE: ${recordType}\nCOMPONENT: ${comp}\nEVENT DATE: 18 Oct 2026\nOBSERVATION: Borescope hot-section inspection completed. Thermal barrier coating intact across all 1st stage stator vanes.\nWORK EXECUTED: Dimensional clearance measurement and high-pressure wash performed.\nPARTS REPLACED: Part #HP-9042-S Seal.\nSIGN-OFF: Cpl. Arjun Singh (IAF-QA-9104).`,
+      extracted_fields: {
+        aircraft_id: aircraftId,
+        date: '18 Oct 2026',
+        component: comp,
+        finding: 'Borescope hot-section inspection completed. Thermal barrier coating intact across all 1st stage stator vanes.',
+        work_performed: 'Dimensional clearance measurement and high-pressure wash performed.',
+        parts_replaced: 'Part #HP-9042-S Seal',
+        uploaded_by: 'Cpl. Arjun Singh',
+        flight_hours: isRafale ? '1,248 h' : '840 h',
+      },
+      confidence_score: 96,
+      validation_issues: [],
+      status: 'Verified',
+    };
+  },
+
+  simulateCsvMapping(filename: string, aircraftId: string, recordType: string) {
+    return {
+      success: true,
+      filename,
+      aircraft_id: aircraftId,
+      record_type: recordType,
+      total_rows: 14,
+      valid_rows: 12,
+      warning_rows: 2,
+      rejected_rows: 0,
+      column_mappings: [
+        { source_column: 'date', target_field: 'date', confidence: 0.98, is_unknown: false },
+        { source_column: 'aircraft', target_field: 'aircraft', confidence: 0.95, is_unknown: false },
+        { source_column: 'component', target_field: 'component', confidence: 0.95, is_unknown: false },
+        { source_column: 'record_type', target_field: 'record_type', confidence: 0.92, is_unknown: false },
+        { source_column: 'finding', target_field: 'finding', confidence: 0.96, is_unknown: false },
+        { source_column: 'work_performed', target_field: 'work_performed', confidence: 0.94, is_unknown: false },
+        { source_column: 'technician', target_field: 'technician', confidence: 0.95, is_unknown: false },
+        { source_column: 'vendor_batch_code', target_field: 'unmapped_field', confidence: 0.2, is_unknown: true },
+      ],
+      unknown_columns: ['vendor_batch_code'],
+      preview_rows: [
+        {
+          date: '18 Oct 2026',
+          aircraft: aircraftId,
+          component: 'Engine (M88)',
+          record_type: recordType,
+          finding: 'Vibration envelope within 1.8 mm/s limits.',
+          work_performed: 'Borescope check completed.',
+          technician: 'Cpl. Arjun Singh',
+        },
+        {
+          date: '17 Oct 2026',
+          aircraft: aircraftId,
+          component: 'Hydraulic System',
+          record_type: recordType,
+          finding: 'System return pressure 205 bar.',
+          work_performed: 'Filter sampling test nominal.',
+          technician: 'Fg Off. Patel',
+        },
+      ],
+      validation_report: [
+        'Validation check: 12 valid records, 2 warnings (1 unmapped source header: vendor_batch_code), 0 fatal errors.',
+      ],
+      can_commit: true,
+    };
+  },
+
+  commitTechnicalRecord(req: any) {
+    const newId = `REC-2026-${1049 + this._inMemoryTechRecords.length}`;
+    const newRec = {
+      id: newId,
+      aircraft_id: req.aircraft_id,
+      aircraft_model: req.aircraft_id.toLowerCase().includes('tejas') ? 'Tejas' : 'Rafale',
+      record_type: req.record_type,
+      date: req.date || '19 Oct 2026',
+      component: req.component || 'General Subsystem',
+      source: req.source || 'PDF Import',
+      uploaded_by: req.uploaded_by || 'Sqn Ldr. Vikram',
+      status: req.status || 'Verified',
+      trust_grade: 'A',
+      finding: req.finding || 'Record reviewed and approved by QA Officer.',
+      work_performed: req.work_performed || 'Inspection logged to aircraft history.',
+      parts_replaced: req.parts_replaced || 'None',
+      flight_hours: req.flight_hours || '1,248 h',
+      document_name: req.document_name || 'Uploaded_Document.pdf',
+      document_type: req.document_type || 'pdf',
+      confidence_score: req.confidence_score || 95,
+      validation_issues: req.validation_issues || [],
+      created_at: new Date().toISOString(),
+      verified_at: new Date().toISOString(),
+      verified_by: req.reviewer || 'Flt Lt. Meera (QA Officer)',
+      base_id: 'base-alpha',
+    };
+
+    this._inMemoryTechRecords.unshift(newRec as any);
+
+    this.recordDecision({
+      actor: newRec.verified_by,
+      action: 'COMMIT_VERIFIED_TECHNICAL_RECORD',
+      previous_state: 'STAGED_IMPORT_REVIEW',
+      resulting_state: `${newId} committed as ${newRec.status} for ${newRec.aircraft_id}`,
+      notes: `Technical logbook committed under ${newRec.record_type} for ${newRec.aircraft_id}. Source: ${newRec.source}.`,
+      baseId: 'all',
+      isOverride: false,
+    });
+
+    return newRec;
+  },
+
+  // -----------------------------------------------------------
+  // Logistics & Spares Mock Store
+  // -----------------------------------------------------------
+  _inMemoryLogisticsInventory: [
+    {
+      id: 'inv-01',
+      part_number: 'RBE2-0012',
+      description: 'Radar LRU',
+      applicable_aircraft: 'Rafale',
+      category: 'Radar',
+      location: 'AFS Ambala',
+      usable_qty: 4,
+      reserved_qty: 1,
+      min_stock: 2,
+      status: 'In Stock' as const,
+      nsn_oem: 'RBE2-THAL',
+      condition: 'Serviceable',
+      last_inspection: '08 Sep 2025',
+      unit_cost_inr: 3500000,
+      compatibility: ['Rafale EH (Standard F3-R)', 'Rafale DH'],
+      image_url: '/spares/radar_lru.png',
+      base_id: 'afs-ambala',
+    },
+    {
+      id: 'inv-02',
+      part_number: 'LG-3301',
+      description: 'Landing Gear Actuator',
+      applicable_aircraft: 'Rafale',
+      category: 'Landing Gear',
+      location: 'BRD Sulur',
+      usable_qty: 2,
+      reserved_qty: 0,
+      min_stock: 2,
+      status: 'Low Stock' as const,
+      nsn_oem: 'LG-SAFR-3301',
+      condition: 'Serviceable',
+      last_inspection: '15 Jul 2025',
+      unit_cost_inr: 1200000,
+      compatibility: ['Rafale EH (Standard F3-R)'],
+      image_url: '/spares/landing_gear_actuator.png',
+      base_id: 'brd-sulur',
+    },
+    {
+      id: 'inv-03',
+      part_number: 'ENG-774A',
+      description: 'Engine Control Unit',
+      applicable_aircraft: 'Rafale',
+      category: 'Engine',
+      location: 'AFS Hasimara',
+      usable_qty: 1,
+      reserved_qty: 1,
+      min_stock: 2,
+      status: 'Critically Low' as const,
+      nsn_oem: '774A-IND',
+      condition: 'Serviceable',
+      last_inspection: '12 Aug 2025',
+      unit_cost_inr: 4800000,
+      compatibility: ['Rafale EH (Standard F3-R)', 'Rafale DH'],
+      image_url: '/spares/ecu_774a.png',
+      base_id: 'afs-hasimara',
+    },
+    {
+      id: 'inv-04',
+      part_number: 'HYD-2209',
+      description: 'Hydraulic Pump',
+      applicable_aircraft: 'Tejas',
+      category: 'Hydraulics',
+      location: 'AFS Pune',
+      usable_qty: 6,
+      reserved_qty: 2,
+      min_stock: 3,
+      status: 'In Stock' as const,
+      nsn_oem: 'HYD-HAL-2209',
+      condition: 'Serviceable',
+      last_inspection: '02 Oct 2025',
+      unit_cost_inr: 850000,
+      compatibility: ['Tejas Mk1 (FOC)', 'Tejas Mk1A'],
+      image_url: '/spares/hydraulic_pump.png',
+      base_id: 'afs-pune',
+    },
+    {
+      id: 'inv-05',
+      part_number: 'AV-5510',
+      description: 'Avionics Module',
+      applicable_aircraft: 'Su-30MKI',
+      category: 'Avionics',
+      location: 'ASP Chandigarh',
+      usable_qty: 3,
+      reserved_qty: 0,
+      min_stock: 2,
+      status: 'In Stock' as const,
+      nsn_oem: 'AV-HAL-5510',
+      condition: 'Serviceable',
+      last_inspection: '19 Sep 2025',
+      unit_cost_inr: 2100000,
+      compatibility: ['Su-30MKI Flanker-H'],
+      image_url: '/spares/avionics_module.png',
+      base_id: 'asp-chandigarh',
+    },
+    {
+      id: 'inv-06',
+      part_number: 'BRK-9087',
+      description: 'Brake Disc',
+      applicable_aircraft: 'Rafale',
+      category: 'Mechanical',
+      location: 'AFS Ambala',
+      usable_qty: 0,
+      reserved_qty: 0,
+      min_stock: 2,
+      status: 'Out of Stock' as const,
+      nsn_oem: 'BRK-MESSIER-9087',
+      condition: 'Unserviceable',
+      last_inspection: '28 Jun 2025',
+      unit_cost_inr: 450000,
+      compatibility: ['Rafale EH', 'Rafale DH'],
+      image_url: '/spares/brake_disc.png',
+      base_id: 'afs-ambala',
+    },
+    {
+      id: 'inv-07',
+      part_number: 'GEN-1140',
+      description: 'APU Starter Generator',
+      applicable_aircraft: 'Su-30MKI',
+      category: 'Engine',
+      location: 'AFS Pune',
+      usable_qty: 1,
+      reserved_qty: 1,
+      min_stock: 2,
+      status: 'Critically Low' as const,
+      nsn_oem: 'GEN-SATURN-1140',
+      condition: 'Serviceable',
+      last_inspection: '10 Aug 2025',
+      unit_cost_inr: 3200000,
+      compatibility: ['Su-30MKI Flanker-H'],
+      image_url: '/spares/generator.png',
+      base_id: 'afs-pune',
+    },
+    {
+      id: 'inv-08',
+      part_number: 'FCS-8812',
+      description: 'Flight Control Actuator',
+      applicable_aircraft: 'Tejas',
+      category: 'Mechanical',
+      location: 'BRD Sulur',
+      usable_qty: 5,
+      reserved_qty: 1,
+      min_stock: 2,
+      status: 'In Stock' as const,
+      nsn_oem: 'FCS-ADE-8812',
+      condition: 'Serviceable',
+      last_inspection: '22 Sep 2025',
+      unit_cost_inr: 1900000,
+      compatibility: ['Tejas Mk1', 'Tejas Mk1A'],
+      image_url: '/spares/fcs_actuator.png',
+      base_id: 'brd-sulur',
+    },
+  ] as LogisticsInventoryItem[],
+
+  _inMemoryMaterialRequests: [
+    {
+      id: 'REQ-1024',
+      aircraft: 'Rafale',
+      part_number: 'RBE2-0012',
+      part_name: 'Radar LRU',
+      quantity: 1,
+      status: 'Approved' as const,
+      required_by: '20 Aug 2025',
+      request_date: '14 Aug 2025',
+      priority: 'High' as const,
+      destination_base: 'AFS Ambala',
+      requester: 'Wg Cdr. Roy (17 Sqn)',
+      linked_work_order_id: 'WO-1038',
+      notes: 'Scheduled radar transmitter array check',
+    },
+    {
+      id: 'REQ-1023',
+      aircraft: 'Tejas',
+      part_number: 'HYD-2209',
+      part_name: 'Hydraulic Pump',
+      quantity: 2,
+      status: 'Pending' as const,
+      required_by: '22 Aug 2025',
+      request_date: '15 Aug 2025',
+      priority: 'Medium' as const,
+      destination_base: 'AFS Pune',
+      requester: 'Sqn Ldr. K. Verma (45 Sqn)',
+      linked_work_order_id: 'WO-1040',
+      notes: 'Replacement seal and auxiliary pump pack',
+    },
+    {
+      id: 'REQ-1022',
+      aircraft: 'Su-30MKI',
+      part_number: 'AV-5510',
+      part_name: 'Avionics Module',
+      quantity: 1,
+      status: 'Approved' as const,
+      required_by: '19 Aug 2025',
+      request_date: '13 Aug 2025',
+      priority: 'High' as const,
+      destination_base: 'ASP Chandigarh',
+      requester: 'Flt Lt. S. Rao (220 Sqn)',
+      linked_work_order_id: 'WO-1036',
+      notes: 'Bus transceiver recalibration swap',
+    },
+    {
+      id: 'REQ-1021',
+      aircraft: 'Rafale',
+      part_number: 'ENG-774A',
+      part_name: 'Engine Control Unit',
+      quantity: 1,
+      status: 'Urgent' as const,
+      required_by: '18 Aug 2025',
+      request_date: '16 Aug 2025',
+      priority: 'Urgent' as const,
+      destination_base: 'AFS Hasimara',
+      requester: 'Sqn Ldr. A. Sharma (Line Officer)',
+      linked_work_order_id: 'WO-1044',
+      notes: 'Critical ECU replacement for Rafale B-124 readiness',
+    },
+    {
+      id: 'REQ-1020',
+      aircraft: 'Rafale',
+      part_number: 'LG-3301',
+      part_name: 'Landing Gear Actuator',
+      quantity: 1,
+      status: 'In Review' as const,
+      required_by: '21 Aug 2025',
+      request_date: '16 Aug 2025',
+      priority: 'Medium' as const,
+      destination_base: 'BRD Sulur',
+      requester: 'Wg Cdr. M. Sen (Maintenance)',
+      linked_work_order_id: 'WO-1041',
+      notes: 'Depot level retraction cylinder maintenance',
+    },
+  ] as MaterialRequestItem[],
+
+  _inMemorySparesTransfers: [
+    {
+      id: 'TRF-2025-081',
+      part_number: 'ENG-774A',
+      part_name: 'Engine Control Unit',
+      quantity: 1,
+      source_location: 'AFS Ambala',
+      destination_location: 'AFS Hasimara',
+      status: 'In Transit' as const,
+      eta: '14 hours',
+      request_date: '18 Aug 2025',
+      transport_mode: 'IAF Air Transit (C-130J)',
+      linked_request_id: 'REQ-1021',
+      approved_by: 'Air Commodore K. R. Sen',
+    },
+    {
+      id: 'TRF-2025-080',
+      part_number: 'HYD-2209',
+      part_name: 'Hydraulic Pump',
+      quantity: 2,
+      source_location: 'AFS Pune',
+      destination_location: 'BRD Sulur',
+      status: 'Approved' as const,
+      eta: '24 hours',
+      request_date: '17 Aug 2025',
+      transport_mode: 'IAF Air Logistics Courier',
+      linked_request_id: 'REQ-1023',
+      approved_by: 'Group Capt. V. Nair',
+    },
+    {
+      id: 'TRF-2025-079',
+      part_number: 'RBE2-0012',
+      part_name: 'Radar LRU',
+      quantity: 1,
+      source_location: 'ASP Chandigarh',
+      destination_location: 'AFS Ambala',
+      status: 'Delivered' as const,
+      eta: 'Completed',
+      request_date: '14 Aug 2025',
+      transport_mode: 'Secured Ground Transit',
+      linked_request_id: 'REQ-1024',
+      approved_by: 'Air Commodore K. R. Sen',
+    },
+  ] as SparesTransferItem[],
+
+  _inMemoryProcurementOrders: [
+    {
+      id: 'PO-2025-412',
+      part_number: 'ENG-774A',
+      part_name: 'Engine Control Unit',
+      supplier: 'OEM (HAL / Safran)',
+      quantity: 5,
+      status: 'On Order' as const,
+      lead_time: '10–15 days',
+      order_date: '10 Aug 2025',
+      contract_ref: 'MOD/AIR/2025/HAL-914',
+      est_total_cost: '₹ 2,40,00,000',
+    },
+    {
+      id: 'PO-2025-411',
+      part_number: 'BRK-9087',
+      part_name: 'Brake Disc',
+      supplier: 'HAL Aerospace Division',
+      quantity: 12,
+      status: 'In Production' as const,
+      lead_time: '3–4 weeks',
+      order_date: '05 Aug 2025',
+      contract_ref: 'MOD/AIR/2025/BRK-082',
+      est_total_cost: '₹ 54,00,000',
+    },
+  ] as ProcurementOrderItem[],
+
+  _inMemoryStockMovements: [
+    {
+      id: 'MOV-8841',
+      timestamp: '18 Aug 2025 14:32',
+      part_number: 'ENG-774A',
+      part_name: 'Engine Control Unit',
+      movement_type: 'RESERVATION' as const,
+      quantity: 1,
+      origin: 'AFS Hasimara',
+      destination: 'AFS Hasimara',
+      responsible_user: 'Flt Lt. Nair (Logistics Depot)',
+      linked_reference: 'REQ-1021',
+      notes: 'Reserved for urgent work order WO-1044 on Rafale B-124',
+    },
+    {
+      id: 'MOV-8840',
+      timestamp: '18 Aug 2025 11:15',
+      part_number: 'ENG-774A',
+      part_name: 'Engine Control Unit',
+      movement_type: 'TRANSFER_DISPATCH' as const,
+      quantity: 1,
+      origin: 'AFS Ambala',
+      destination: 'AFS Hasimara',
+      responsible_user: 'Cpl. V. Joshi',
+      linked_reference: 'TRF-2025-081',
+      notes: 'Dispatched via C-130J flight IL-402',
+    },
+    {
+      id: 'MOV-8839',
+      timestamp: '17 Aug 2025 16:40',
+      part_number: 'HYD-2209',
+      part_name: 'Hydraulic Pump',
+      movement_type: 'RECEIPT' as const,
+      quantity: 4,
+      origin: 'HAL Nashik Depot',
+      destination: 'AFS Pune',
+      responsible_user: 'Sqn Ldr. K. Verma',
+      linked_reference: 'PO-2025-398',
+      notes: 'Quality inspected and slotted into primary rack',
+    },
+  ] as StockMovementItem[],
+
+  getLogisticsKpis() {
+    return {
+      total_inventory_items: 4230,
+      low_stock_items: 28,
+      pending_requests: 12,
+      transfers_in_progress: 7,
+      approved_orders: 19,
+      is_demo_data: true,
+    };
+  },
+
+  getLogisticsInventory(params?: { category?: string; aircraft?: string; location?: string; stock_status?: string; search?: string }) {
+    let list = [...this._inMemoryLogisticsInventory];
+    if (params?.category && params.category !== 'all' && params.category !== 'All Categories') {
+      list = list.filter((i) => i.category.toLowerCase().includes(params.category!.toLowerCase()));
+    }
+    if (params?.aircraft && params.aircraft !== 'all' && params.aircraft !== 'All Aircraft') {
+      list = list.filter((i) => i.applicable_aircraft.toLowerCase().includes(params.aircraft!.toLowerCase()));
+    }
+    if (params?.location && params.location !== 'all' && params.location !== 'All Locations') {
+      list = list.filter((i) => i.location.toLowerCase().includes(params.location!.toLowerCase()));
+    }
+    if (params?.stock_status && params.stock_status !== 'all' && params.stock_status !== 'Stock Status') {
+      list = list.filter((i) => i.status.toLowerCase().includes(params.stock_status!.toLowerCase()));
+    }
+    if (params?.search && params.search.trim()) {
+      const q = params.search.toLowerCase();
+      list = list.filter((i) => i.part_number.toLowerCase().includes(q) || i.description.toLowerCase().includes(q) || i.nsn_oem.toLowerCase().includes(q));
+    }
+    return list;
+  },
+
+  getLogisticsInventoryDetail(itemId: string) {
+    const item = this._inMemoryLogisticsInventory.find((i) => i.id === itemId || i.part_number === itemId);
+    return item || this._inMemoryLogisticsInventory[0];
+  },
+
+  reserveLogisticsPart(req: any) {
+    const item = this._inMemoryLogisticsInventory.find((i) => i.id === req.inventory_id || i.part_number === req.part_number);
+    if (item && item.usable_qty >= (req.quantity || 1)) {
+      item.usable_qty -= req.quantity || 1;
+      item.reserved_qty += req.quantity || 1;
+      if (item.usable_qty === 0) item.status = 'Critically Low';
+      else if (item.usable_qty <= item.min_stock) item.status = 'Low Stock';
+    }
+    return item || this._inMemoryLogisticsInventory[0];
+  },
+
+  getMaterialRequests(status?: string) {
+    if (status && status !== 'all') {
+      return this._inMemoryMaterialRequests.filter((r) => r.status.toLowerCase() === status.toLowerCase());
+    }
+    return this._inMemoryMaterialRequests;
+  },
+
+  createMaterialRequest(req: any): MaterialRequestItem {
+    const newReq: MaterialRequestItem = {
+      id: `REQ-${1025 + this._inMemoryMaterialRequests.length}`,
+      aircraft: req.aircraft,
+      part_number: req.part_number,
+      part_name: req.part_name,
+      quantity: req.quantity || 1,
+      status: req.priority === 'Urgent' ? 'Urgent' : 'Pending',
+      required_by: req.required_by,
+      request_date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      priority: (req.priority as any) || 'Medium',
+      destination_base: req.destination_base,
+      requester: req.requester || 'Squadron Logistics',
+      linked_work_order_id: req.linked_work_order_id,
+      notes: req.notes,
+    };
+    this._inMemoryMaterialRequests.unshift(newReq);
+    return newReq;
+  },
+
+  getSparesTransfers(): SparesTransferItem[] {
+    return this._inMemorySparesTransfers;
+  },
+
+  createSparesTransfer(req: any): SparesTransferItem {
+    const newTrf: SparesTransferItem = {
+      id: `TRF-2025-${82 + this._inMemorySparesTransfers.length}`,
+      part_number: req.part_number,
+      part_name: req.part_name,
+      quantity: req.quantity || 1,
+      source_location: req.source_location,
+      destination_location: req.destination_location,
+      status: 'Requested',
+      eta: '18 hours (Est.)',
+      request_date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      transport_mode: req.transport_mode || 'IAF Air Transit (C-130J)',
+      linked_request_id: req.linked_request_id,
+      approved_by: 'Logistics Officer',
+    };
+    this._inMemorySparesTransfers.unshift(newTrf);
+    return newTrf;
+  },
+
+  getProcurementOrders(): ProcurementOrderItem[] {
+    return this._inMemoryProcurementOrders;
+  },
+
+  createProcurementOrder(req: any): ProcurementOrderItem {
+    const newPo: ProcurementOrderItem = {
+      id: `PO-2025-${413 + this._inMemoryProcurementOrders.length}`,
+      part_number: req.part_number,
+      part_name: req.part_name,
+      supplier: req.supplier,
+      quantity: req.quantity || 1,
+      status: 'On Order',
+      lead_time: '10–15 days',
+      order_date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      contract_ref: req.contract_ref || 'MOD/AIR/2025/HAL-915',
+      est_total_cost: req.est_total_cost || '₹ 45,00,000',
+    };
+    this._inMemoryProcurementOrders.unshift(newPo);
+    return newPo;
+  },
+
+  getStockMovements() {
+    return this._inMemoryStockMovements;
   },
 };
 

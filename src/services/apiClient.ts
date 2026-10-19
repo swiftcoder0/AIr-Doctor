@@ -31,6 +31,21 @@ import {
   CommanderFleetMetrics,
   ApprovalActionRequest,
   ApprovalActionResponse,
+  TechnicalRecordItem,
+  TechnicalRecordStats,
+  PdfExtractResponse,
+  CsvMapAndValidateResponse,
+  CommitTechnicalRecordRequest,
+  LogisticsInventoryItem,
+  LogisticsKpiSummary,
+  MaterialRequestItem,
+  CreateMaterialRequest,
+  SparesTransferItem,
+  CreateSparesTransferRequest,
+  ProcurementOrderItem,
+  CreateProcurementOrderRequest,
+  StockMovementItem,
+  ReservePartRequest,
 } from '../types/aircraft';
 import { mockAirDoctorService } from './mockAirDoctorService';
 
@@ -482,6 +497,228 @@ export const api = {
       return mockAirDoctorService.actionCommanderApproval(approvalId, req);
     }
   },
+
+  // -----------------------------------------------------------
+  // Technical Records & Quality Endpoints
+  // -----------------------------------------------------------
+  async getTechnicalRecords(params?: {
+    aircraft_id?: string;
+    record_type?: string;
+    status?: string;
+    search?: string;
+  }): Promise<TechnicalRecordItem[]> {
+    try {
+      const query = new URLSearchParams();
+      if (params?.aircraft_id && params.aircraft_id !== 'all') query.append('aircraft_id', params.aircraft_id);
+      if (params?.record_type && params.record_type !== 'All Records' && params.record_type !== 'all')
+        query.append('record_type', params.record_type);
+      if (params?.status && params.status !== 'all') query.append('status', params.status);
+      if (params?.search && params.search.trim()) query.append('search', params.search.trim());
+
+      const qs = query.toString() ? `?${query.toString()}` : '';
+      return await fetchJson<TechnicalRecordItem[]>(`/tech-records${qs}`);
+    } catch {
+      return mockAirDoctorService.getTechnicalRecords(params) as TechnicalRecordItem[];
+    }
+  },
+
+  async getTechnicalRecordsStats(): Promise<TechnicalRecordStats> {
+    try {
+      return await fetchJson<TechnicalRecordStats>('/tech-records/stats');
+    } catch {
+      return mockAirDoctorService.getTechnicalRecordsStats();
+    }
+  },
+
+  async uploadPdfRecord(
+    file: File | Blob,
+    filename: string,
+    aircraftId: string,
+    recordType: string
+  ): Promise<PdfExtractResponse> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file, filename);
+      formData.append('aircraft_id', aircraftId);
+      formData.append('record_type', recordType);
+
+      const url = `${API_BASE_URL}/tech-records/upload-pdf`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-AirDoctor-Role': getActiveUserRole(),
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      return await response.json();
+    } catch {
+      return mockAirDoctorService.simulatePdfExtraction(filename, aircraftId, recordType);
+    }
+  },
+
+  async uploadCsvRecord(
+    file: File | Blob,
+    filename: string,
+    aircraftId: string,
+    recordType: string
+  ): Promise<CsvMapAndValidateResponse> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file, filename);
+      formData.append('aircraft_id', aircraftId);
+      formData.append('record_type', recordType);
+
+      const url = `${API_BASE_URL}/tech-records/upload-csv`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-AirDoctor-Role': getActiveUserRole(),
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      return await response.json();
+    } catch {
+      return mockAirDoctorService.simulateCsvMapping(filename, aircraftId, recordType);
+    }
+  },
+
+  async commitTechnicalRecord(req: CommitTechnicalRecordRequest): Promise<TechnicalRecordItem> {
+    try {
+      return await fetchJson<TechnicalRecordItem>('/tech-records/commit', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      });
+    } catch {
+      return mockAirDoctorService.commitTechnicalRecord(req) as TechnicalRecordItem;
+    }
+  },
+
+  // -------------------------------------------------------------
+  // Logistics & Spares API
+  // -------------------------------------------------------------
+  async getLogisticsKpis(): Promise<LogisticsKpiSummary> {
+    try {
+      return await fetchJson<LogisticsKpiSummary>('/logistics/kpis');
+    } catch {
+      return mockAirDoctorService.getLogisticsKpis();
+    }
+  },
+
+  async getLogisticsInventory(params?: {
+    category?: string;
+    aircraft?: string;
+    location?: string;
+    stock_status?: string;
+    search?: string;
+  }): Promise<LogisticsInventoryItem[]> {
+    try {
+      const sp = new URLSearchParams();
+      if (params?.category && params.category !== 'all' && params.category !== 'All Categories') sp.append('category', params.category);
+      if (params?.aircraft && params.aircraft !== 'all' && params.aircraft !== 'All Aircraft') sp.append('aircraft', params.aircraft);
+      if (params?.location && params.location !== 'all' && params.location !== 'All Locations') sp.append('location', params.location);
+      if (params?.stock_status && params.stock_status !== 'all' && params.stock_status !== 'Stock Status') sp.append('stock_status', params.stock_status);
+      if (params?.search) sp.append('search', params.search);
+
+      const qs = sp.toString() ? `?${sp.toString()}` : '';
+      return await fetchJson<LogisticsInventoryItem[]>(`/logistics/inventory${qs}`);
+    } catch {
+      return mockAirDoctorService.getLogisticsInventory(params);
+    }
+  },
+
+  async getLogisticsInventoryDetail(itemId: string): Promise<LogisticsInventoryItem> {
+    try {
+      return await fetchJson<LogisticsInventoryItem>(`/logistics/inventory/${encodeURIComponent(itemId)}`);
+    } catch {
+      return mockAirDoctorService.getLogisticsInventoryDetail(itemId);
+    }
+  },
+
+  async reserveLogisticsPart(req: ReservePartRequest): Promise<LogisticsInventoryItem> {
+    try {
+      return await fetchJson<LogisticsInventoryItem>('/logistics/reserve', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      });
+    } catch {
+      return mockAirDoctorService.reserveLogisticsPart(req);
+    }
+  },
+
+  async getMaterialRequests(status?: string): Promise<MaterialRequestItem[]> {
+    try {
+      const qs = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : '';
+      return await fetchJson<MaterialRequestItem[]>(`/logistics/requests${qs}`);
+    } catch {
+      return mockAirDoctorService.getMaterialRequests(status);
+    }
+  },
+
+  async createMaterialRequest(req: CreateMaterialRequest): Promise<MaterialRequestItem> {
+    try {
+      return await fetchJson<MaterialRequestItem>('/logistics/requests', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      });
+    } catch {
+      return mockAirDoctorService.createMaterialRequest(req);
+    }
+  },
+
+  async getSparesTransfers(): Promise<SparesTransferItem[]> {
+    try {
+      return await fetchJson<SparesTransferItem[]>('/logistics/transfers');
+    } catch {
+      return mockAirDoctorService.getSparesTransfers();
+    }
+  },
+
+  async createSparesTransfer(req: CreateSparesTransferRequest): Promise<SparesTransferItem> {
+    try {
+      return await fetchJson<SparesTransferItem>('/logistics/transfers', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      });
+    } catch {
+      return mockAirDoctorService.createSparesTransfer(req);
+    }
+  },
+
+  async getProcurementOrders(): Promise<ProcurementOrderItem[]> {
+    try {
+      return await fetchJson<ProcurementOrderItem[]>('/logistics/procurement');
+    } catch {
+      return mockAirDoctorService.getProcurementOrders();
+    }
+  },
+
+  async createProcurementOrder(req: CreateProcurementOrderRequest): Promise<ProcurementOrderItem> {
+    try {
+      return await fetchJson<ProcurementOrderItem>('/logistics/procurement', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      });
+    } catch {
+      return mockAirDoctorService.createProcurementOrder(req);
+    }
+  },
+
+  async getStockMovements(): Promise<StockMovementItem[]> {
+    try {
+      return await fetchJson<StockMovementItem[]>('/logistics/movements');
+    } catch {
+      return mockAirDoctorService.getStockMovements();
+    }
+  },
 };
+
 
 

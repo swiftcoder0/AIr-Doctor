@@ -192,3 +192,121 @@ class DecisionLedgerORM(Base):
     base_id = Column(String(50), nullable=True)
     is_override = Column(Boolean, default=False)
     override_reason = Column(Text, nullable=True)
+
+
+class TechnicalRecordORM(Base):
+    __tablename__ = "technical_records"
+
+    id = Column(String(50), primary_key=True, index=True) # e.g. "REC-2026-1048"
+    aircraft_id = Column(String(50), nullable=False, index=True) # e.g. "Rafale R-01"
+    aircraft_model = Column(String(50), default="Rafale") # "Rafale" | "Tejas" | "MiG-21"
+    record_type = Column(String(100), nullable=False, index=True)
+    date = Column(String(50), nullable=False) # e.g. "18 Oct 2026"
+    component = Column(String(100), nullable=True) # e.g. "Engine (M88)"
+    source = Column(String(100), default="PDF Import") # "PDF Import" | "CSV Import" | "Digital Import"
+    uploaded_by = Column(String(100), default="Cpl. Arjun Singh")
+    status = Column(String(50), default="Verified") # "Verified" | "Pending" | "Incomplete" | "Rejected"
+    trust_grade = Column(String(10), default="A") # "A" | "B" | "C" | "D"
+    finding = Column(Text, default="")
+    work_performed = Column(Text, default="")
+    parts_replaced = Column(String(255), default="")
+    flight_hours = Column(String(50), default="")
+    document_name = Column(String(255), default="")
+    document_type = Column(String(50), default="pdf")
+    raw_extracted_json = Column(Text, default="{}")
+    validation_issues_json = Column(Text, default="[]")
+    confidence_score = Column(Integer, default=95)
+    created_at = Column(String(50), nullable=False)
+    verified_at = Column(String(50), nullable=True)
+    verified_by = Column(String(100), nullable=True)
+    base_id = Column(String(50), default="base-alpha")
+
+
+class LogisticsInventoryORM(Base):
+    __tablename__ = "logistics_inventory"
+
+    id = Column(String(50), primary_key=True, index=True)
+    part_number = Column(String(50), nullable=False, index=True)
+    description = Column(String(255), nullable=False)
+    applicable_aircraft = Column(String(100), nullable=False, index=True)
+    category = Column(String(100), default="Engine")
+    location = Column(String(100), nullable=False, index=True)
+    usable_qty = Column(Integer, default=0)
+    reserved_qty = Column(Integer, default=0)
+    min_stock = Column(Integer, default=1)
+    status = Column(String(50), default="In Stock") # 'In Stock' | 'Low Stock' | 'Critically Low' | 'Out of Stock'
+    nsn_oem = Column(String(100), default="")
+    condition = Column(String(50), default="Serviceable")
+    last_inspection = Column(String(50), default="")
+    unit_cost_inr = Column(Integer, default=0)
+    compatibility_json = Column(Text, default="[]")
+    image_url = Column(String(255), nullable=True)
+    base_id = Column(String(50), default="afs-ambala")
+
+
+class MaterialRequestORM(Base):
+    __tablename__ = "material_requests"
+
+    id = Column(String(50), primary_key=True, index=True) # e.g. "REQ-1021"
+    aircraft = Column(String(100), nullable=False)
+    part_number = Column(String(50), nullable=False, index=True)
+    part_name = Column(String(255), nullable=False)
+    quantity = Column(Integer, default=1)
+    status = Column(String(50), default="Pending") # 'Approved' | 'Pending' | 'Urgent' | 'In Review' | 'Completed' | 'Rejected'
+    required_by = Column(String(50), nullable=False)
+    request_date = Column(String(50), nullable=False)
+    priority = Column(String(50), default="Medium") # 'Urgent' | 'High' | 'Medium' | 'Low'
+    destination_base = Column(String(100), nullable=False)
+    requester = Column(String(100), nullable=False)
+    linked_work_order_id = Column(String(50), nullable=True)
+    notes = Column(Text, default="")
+
+
+class SparesTransferORM(Base):
+    __tablename__ = "spares_transfers"
+
+    id = Column(String(50), primary_key=True, index=True) # e.g. "TRF-2025-081"
+    part_number = Column(String(50), nullable=False, index=True)
+    part_name = Column(String(255), nullable=False)
+    quantity = Column(Integer, default=1)
+    source_location = Column(String(100), nullable=False)
+    destination_location = Column(String(100), nullable=False)
+    status = Column(String(50), default="Requested") # 'In Transit' | 'Requested' | 'Approved' | 'Delivered' | 'Cancelled'
+    eta = Column(String(50), default="14 hours")
+    request_date = Column(String(50), nullable=False)
+    transport_mode = Column(String(100), default="IAF Air Transit (C-130J)")
+    linked_request_id = Column(String(50), nullable=True)
+    approved_by = Column(String(100), nullable=True)
+
+
+class ProcurementOrderORM(Base):
+    __tablename__ = "procurement_orders"
+
+    id = Column(String(50), primary_key=True, index=True) # e.g. "PO-2025-412"
+    part_number = Column(String(50), nullable=False, index=True)
+    part_name = Column(String(255), nullable=False)
+    supplier = Column(String(100), default="OEM (HAL)")
+    quantity = Column(Integer, default=1)
+    status = Column(String(50), default="On Order") # 'On Order' | 'Pending MoD Sanction' | 'Delivered' | 'In Production'
+    lead_time = Column(String(50), default="10–15 days")
+    order_date = Column(String(50), nullable=False)
+    contract_ref = Column(String(100), default="")
+    est_total_cost = Column(String(100), default="")
+
+
+class StockMovementORM(Base):
+    __tablename__ = "stock_movements"
+
+    id = Column(String(50), primary_key=True, index=True) # e.g. "MOV-8841"
+    timestamp = Column(String(50), nullable=False)
+    part_number = Column(String(50), nullable=False, index=True)
+    part_name = Column(String(255), nullable=False)
+    movement_type = Column(String(50), default="RESERVATION") # 'RESERVATION' | 'RECEIPT' | 'ISSUE' | 'TRANSFER_DISPATCH' | 'RETURN'
+    quantity = Column(Integer, default=1)
+    origin = Column(String(100), default="")
+    destination = Column(String(100), default="")
+    responsible_user = Column(String(100), nullable=False)
+    linked_reference = Column(String(100), nullable=True)
+    notes = Column(Text, default="")
+
+
