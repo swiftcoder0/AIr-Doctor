@@ -41,6 +41,27 @@ app.add_middleware(
 # Include all API routes
 app.include_router(router)
 
+import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, Response
+
+if os.path.exists("public"):
+    app.mount("/public", StaticFiles(directory="public"), name="public")
+
+    @app.get("/tejas_hangar.jpg")
+    async def serve_tejas_hangar():
+        file_path = os.path.join("public", "tejas_hangar.jpg")
+        if os.path.exists(file_path):
+            return FileResponse(file_path, media_type="image/jpeg")
+        return Response(status_code=404)
+
+    @app.get("/iaf_fighter_tarmac.jpg")
+    async def serve_iaf_fighter_tarmac():
+        file_path = os.path.join("public", "iaf_fighter_tarmac.jpg")
+        if os.path.exists(file_path):
+            return FileResponse(file_path, media_type="image/jpeg")
+        return Response(status_code=404)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)
