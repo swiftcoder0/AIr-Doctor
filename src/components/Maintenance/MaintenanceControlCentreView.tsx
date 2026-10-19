@@ -653,20 +653,21 @@ export const MaintenanceControlCentreView: React.FC<MaintenanceControlCentreView
                 <div
                   onClick={() => setIsLightboxOpen(true)}
                   title="Click to expand hangar inspection view"
-                  className="my-3 rounded-xl overflow-hidden border border-slate-200 relative aspect-video bg-slate-900 cursor-pointer group shadow-xs hover:border-blue-400 transition-all"
+                  className="my-3 rounded-xl overflow-hidden border border-slate-200 relative aspect-video bg-slate-900 cursor-pointer group shadow-xs hover:border-blue-400 transition-all bg-cover bg-center"
+                  style={{
+                    backgroundImage: `url('${getAircraftImage(selectedWorkOrder)}')`,
+                  }}
                 >
                   <img
                     src={getAircraftImage(selectedWorkOrder)}
                     onError={(e) => {
-                      const img = e.currentTarget;
-                      if (img.src !== iafFighterImg) {
-                        img.src = iafFighterImg;
-                      }
+                      // Prevent ugly broken image icon; CSS background-image renders cleanly
+                      e.currentTarget.style.display = 'none';
                     }}
                     alt={selectedWorkOrder.aircraft}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 relative z-0"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/10 group-hover:from-slate-950/90 transition-all pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-black/10 group-hover:from-slate-950/90 transition-all pointer-events-none z-10" />
 
                   {/* Badges */}
                   <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-white text-[10px] font-mono pointer-events-none">
@@ -1202,17 +1203,19 @@ export const MaintenanceControlCentreView: React.FC<MaintenanceControlCentreView
                 </div>
 
                 {/* Modal Body: Large Image */}
-                <div className="relative flex-1 bg-black overflow-hidden flex items-center justify-center min-h-[380px]">
+                <div
+                  className="relative flex-1 bg-black overflow-hidden flex items-center justify-center min-h-[380px] bg-contain bg-center bg-no-repeat"
+                  style={{
+                    backgroundImage: `url('${getAircraftImage(selectedWorkOrder)}')`,
+                  }}
+                >
                   <img
                     src={getAircraftImage(selectedWorkOrder)}
                     onError={(e) => {
-                      const img = e.currentTarget;
-                      if (img.src !== iafFighterImg) {
-                        img.src = iafFighterImg;
-                      }
+                      e.currentTarget.style.display = 'none';
                     }}
                     alt={selectedWorkOrder.aircraft}
-                    className="max-h-[62vh] w-auto max-w-full object-contain"
+                    className="max-h-[62vh] w-auto max-w-full object-contain relative z-0"
                   />
                   <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
                     <div className="px-3 py-1.5 bg-black/80 backdrop-blur-md rounded-lg text-xs font-mono text-slate-200 border border-white/10">
