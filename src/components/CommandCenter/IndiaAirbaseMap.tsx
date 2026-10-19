@@ -73,14 +73,16 @@ export const IndiaAirbaseMap: React.FC<IndiaAirbaseMapProps> = ({
         attributionControl: false,
       });
 
-      // CartoDB Dark Matter Tiles for aerospace tactical view
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        subdomains: 'abcd',
-        maxZoom: 19,
+      // Standard Free OpenStreetMap Tiles with Tactical Dark Filter (Zero API Key Required)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        className: 'tactical-dark-osm-tiles',
+        subdomains: ['a', 'b', 'c'],
       }).addTo(map);
 
       mapInstanceRef.current = map;
     }
+
 
     return () => {
       // Don't destroy map on every re-render; we keep instance alive
@@ -226,7 +228,16 @@ export const IndiaAirbaseMap: React.FC<IndiaAirbaseMapProps> = ({
       </div>
 
       {/* Leaflet Map Canvas Container */}
+      <style>{`
+        .tactical-dark-osm-tiles .leaflet-tile {
+          filter: brightness(0.6) invert(1) contrast(2.6) hue-rotate(200deg) saturate(0.35) brightness(0.72) !important;
+        }
+        .leaflet-container {
+          background-color: #0B132B !important;
+        }
+      `}</style>
       <div ref={mapContainerRef} className="flex-1 w-full relative z-0" />
+
 
       {/* Floating Tactical Zoom Controls */}
       <div className="absolute top-16 right-3 z-10 flex flex-col gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-700/80 shadow-lg backdrop-blur-xs">

@@ -167,7 +167,7 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans select-none text-slate-800">
+    <div className="h-screen max-h-screen bg-[#F8FAFC] flex flex-col font-sans select-none text-slate-800 overflow-hidden">
       {/* 1. Header with Base Selector, Search & Operations Banner */}
       <Header
         searchQuery={searchQuery}
