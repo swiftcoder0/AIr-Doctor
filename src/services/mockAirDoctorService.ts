@@ -24,6 +24,10 @@ import {
   VerifyChainResult,
   ComponentRulPrediction,
   SensorAttribution,
+  DepartmentProfile,
+  DepartmentLoginResponse,
+  VerifyDepartmentTotpResponse,
+  DEPARTMENT_PROFILES,
 } from '../types/aircraft';
 import {
   baseList,
@@ -734,6 +738,73 @@ export const mockAirDoctorService = {
       verified: true,
       role,
       message: `${role} authorization verified via TOTP Multi-Factor Authentication.`,
+    };
+  },
+
+  // -----------------------------------------------------------
+  // Department Login & 2-Step TOTP Gate (SIH Ministry of Defence)
+  // -----------------------------------------------------------
+  getDepartmentProfiles(): DepartmentProfile[] {
+    return DEPARTMENT_PROFILES;
+  },
+
+  async loginDepartment(deptId: string, password?: string): Promise<DepartmentLoginResponse> {
+    const cleanId = (deptId || '').trim().toLowerCase();
+    const dept = DEPARTMENT_PROFILES.find(
+      (d) => d.id.toLowerCase() === cleanId || d.serviceId.toLowerCase() === cleanId
+    );
+    if (!dept) {
+      throw new Error(`Department with ID '${deptId}' not found in Ministry of Defence directory.`);
+    }
+
+    if (password && password.trim() !== '') {
+      const cleanPwd = password.trim();
+      const validPasswords = new Set(['AirDoctor@2026', 'airdoctor2026', 'password123', 'admin', 'demo']);
+      if (!validPasswords.has(cleanPwd)) {
+        throw new Error("Invalid department security key. Evaluator demo password is 'AirDoctor@2026'.");
+      }
+    }
+
+    return {
+      step: 'totp_required',
+      department_id: dept.id,
+      department_name: dept.name,
+      officer: dept.officer,
+      service_id: dept.serviceId,
+      role: dept.role,
+      default_tab: dept.defaultTab,
+      demo_totp_code: this.getCurrentTotpCode(),
+      message: `Step 1 verified for ${dept.officer}. 6-digit Time-Based OTP required to complete sign-in.`,
+    };
+  },
+
+  async verifyDepartmentTotp(deptId: string, totpCode: string): Promise<VerifyDepartmentTotpResponse> {
+    const cleanId = (deptId || '').trim().toLowerCase();
+    const dept = DEPARTMENT_PROFILES.find(
+      (d) => d.id.toLowerCase() === cleanId || d.serviceId.toLowerCase() === cleanId
+    );
+    if (!dept) {
+      throw new Error(`Department '${deptId}' not found.`);
+    }
+
+    const clean = (totpCode || '').trim();
+    const current = this.getCurrentTotpCode();
+    const valid = clean === current || clean === '777888' || clean === '123456';
+    if (!valid) {
+      throw new Error("Invalid or expired TOTP code. Use the current 30-second token or click 'Auto-Fill OTP'.");
+    }
+
+    return {
+      verified: true,
+      department_id: dept.id,
+      department_name: dept.name,
+      officer: dept.officer,
+      service_id: dept.serviceId,
+      role: dept.role,
+      default_tab: dept.defaultTab,
+      message: `Authentication successful. Session clearance established for ${dept.officer}.`,
+      access_token: `iaf-auth-${Math.random().toString(36).substring(2, 14)}`,
+      authenticated_at: new Date().toISOString(),
     };
   },
 };

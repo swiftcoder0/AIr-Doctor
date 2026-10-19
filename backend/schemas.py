@@ -385,15 +385,55 @@ class SecurityStatus(BaseModel):
     crypto_algorithms: Optional[Dict[str, str]] = None
 
 
+class DepartmentProfile(BaseModel):
+    id: str
+    name: str
+    officer: str
+    service_id: str
+    role: str
+    default_tab: str
+    description: str
+    agency_label: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DepartmentLoginRequest(BaseModel):
+    department_id: str
+    service_id: Optional[str] = None
+    password: Optional[str] = None
+
+
+class DepartmentLoginResponse(BaseModel):
+    step: str = "totp_required"
+    department_id: str
+    department_name: str
+    officer: str
+    service_id: str
+    role: str
+    default_tab: str
+    demo_totp_code: str
+    message: str
+
+
 class VerifyTotpRequest(BaseModel):
-    code: str
+    code: Optional[str] = None
+    totp_code: Optional[str] = None
     role: Optional[str] = "Commander"
+    department_id: Optional[str] = None
 
 
 class VerifyTotpResponse(BaseModel):
     verified: bool
     role: str = "Commander"
     message: str
+    department_id: Optional[str] = None
+    department_name: Optional[str] = None
+    officer: Optional[str] = None
+    service_id: Optional[str] = None
+    default_tab: Optional[str] = None
+    access_token: Optional[str] = None
+    authenticated_at: Optional[str] = None
 
 
 # -------------------------------------------------------------

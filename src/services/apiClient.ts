@@ -21,6 +21,11 @@ import {
   SecurityStatus,
   VerifyTotpResult,
   VerifyChainResult,
+  DepartmentProfile,
+  DepartmentLoginRequest,
+  DepartmentLoginResponse,
+  VerifyDepartmentTotpRequest,
+  VerifyDepartmentTotpResponse,
 } from '../types/aircraft';
 import { mockAirDoctorService } from './mockAirDoctorService';
 
@@ -380,6 +385,47 @@ export const api = {
       });
     } catch {
       return mockAirDoctorService.verifyTotp(code, role);
+    }
+  },
+
+  // -----------------------------------------------------------
+  // Department Login & 2-Step TOTP Gate (SIH Ministry of Defence)
+  // -----------------------------------------------------------
+  async getDepartments(): Promise<DepartmentProfile[]> {
+    try {
+      return await fetchJson<DepartmentProfile[]>('/auth/departments');
+    } catch {
+      return mockAirDoctorService.getDepartmentProfiles();
+    }
+  },
+
+  async loginDepartment(req: DepartmentLoginRequest): Promise<DepartmentLoginResponse> {
+    try {
+      return await fetchJson<DepartmentLoginResponse>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      });
+    } catch {
+      return mockAirDoctorService.loginDepartment(req.department_id, req.password);
+    }
+  },
+
+  async verifyDepartmentTotp(req: VerifyDepartmentTotpRequest): Promise<VerifyDepartmentTotpResponse> {
+    try {
+      const res = await fetchJson<VerifyDepartmentTotpResponse>('/auth/verify-totp', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      });
+      if (res.role) {
+        setActiveUserRole(res.role);
+      }
+      return res;
+    } catch {
+      const res = await mockAirDoctorService.verifyDepartmentTotp(req.department_id, req.totp_code);
+      if (res.role) {
+        setActiveUserRole(res.role);
+      }
+      return res;
     }
   },
 };

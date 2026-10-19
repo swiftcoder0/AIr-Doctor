@@ -348,3 +348,114 @@ export interface ComponentRulPrediction {
   shap_drivers: SensorAttribution[];
 }
 
+// -------------------------------------------------------------
+// Ministry of Defence SIH Problem Statement: 5 Department Silo Profiles
+// -------------------------------------------------------------
+export interface DepartmentProfile {
+  id: string;
+  name: string;
+  officer: string;
+  serviceId: string;
+  role: UserRole;
+  defaultTab: string;
+  description: string;
+  badgeColor?: string;
+  agencyLabel: string;
+}
+
+export interface DepartmentLoginRequest {
+  department_id: string;
+  service_id?: string;
+  password?: string;
+}
+
+export interface DepartmentLoginResponse {
+  step: 'totp_required';
+  department_id: string;
+  department_name: string;
+  officer: string;
+  service_id: string;
+  role: UserRole;
+  default_tab: string;
+  demo_totp_code: string;
+  message: string;
+}
+
+export interface VerifyDepartmentTotpRequest {
+  department_id: string;
+  totp_code: string;
+  role?: UserRole;
+}
+
+export interface VerifyDepartmentTotpResponse {
+  verified: boolean;
+  department_id: string;
+  department_name: string;
+  officer: string;
+  service_id: string;
+  role: UserRole;
+  default_tab: string;
+  message: string;
+  access_token: string;
+  authenticated_at: string;
+}
+
+export const DEPARTMENT_PROFILES: DepartmentProfile[] = [
+  {
+    id: 'fleet-command',
+    name: 'Air Fleet Command (Operations HQ)',
+    officer: 'Wing Cmdr. Aditya (Fleet Commander)',
+    serviceId: 'IAF-CMD-01',
+    role: 'Commander',
+    defaultTab: 'command-center',
+    description: 'Fleet-wide availability, sortie clearance & final cross-base transfer authorization',
+    badgeColor: 'bg-emerald-600 text-white',
+    agencyLabel: 'Operations Command',
+  },
+  {
+    id: 'health-diagnostics',
+    name: 'Aircraft Health & Diagnostics Cell (Sensors & Digital Twin)',
+    officer: 'Sqn Ldr. Vikram (Chief Engineering Officer)',
+    serviceId: 'IAF-ENG-02',
+    role: 'Planner',
+    defaultTab: 'aircraft-health',
+    description: '3D Digital Twin, onboard sensor telemetry, LightGBM RUL ranges & SHAP drivers',
+    badgeColor: 'bg-blue-600 text-white',
+    agencyLabel: 'Engineering & Diagnostics',
+  },
+  {
+    id: 'tech-records',
+    name: 'Technical Records & Quality Assurance Cell (Logbooks)',
+    officer: 'Flt Lt. Meera (QA & Technical Records Officer)',
+    serviceId: 'IAF-REC-03',
+    role: 'Planner',
+    defaultTab: 'data-trust',
+    description: 'Paper-to-digital CSV ingestion, A–D Data Trust grading & Verify-First queue',
+    badgeColor: 'bg-indigo-600 text-white',
+    agencyLabel: 'Technical Records & QA',
+  },
+  {
+    id: 'logistics-spares',
+    name: 'Logistics & Spares Depot (Supply Chain)',
+    officer: 'Sqn Ldr. Rajesh (Chief Logistics Officer)',
+    serviceId: 'IAF-LOG-04',
+    role: 'Planner',
+    defaultTab: 'resource-optimizer',
+    description: 'Multi-base spare stock (HP-9042), supplier lead times & +1 What-If recovery',
+    badgeColor: 'bg-amber-600 text-white',
+    agencyLabel: 'Spares & Multi-Base Supply',
+  },
+  {
+    id: 'maintenance-agency',
+    name: 'Maintenance Agency (Hangar Bays & Technician Shifts)',
+    officer: 'MWO R. Sharma (Hangar Floor Controller)',
+    serviceId: 'IAF-MNT-05',
+    role: 'Viewer',
+    defaultTab: 'work-orders',
+    description: 'Hangar bay occupancy, specialist technician shifts & 3-gate Ready-to-Fly schedule',
+    badgeColor: 'bg-slate-700 text-white',
+    agencyLabel: 'Hangar Floor & Technicians',
+  },
+];
+
+

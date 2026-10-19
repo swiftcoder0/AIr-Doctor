@@ -106,3 +106,78 @@ def test_model_loader_slot_and_rul_prediction():
     assert 0 <= rul["risk_range_pct"] <= 100
     assert len(rul["shap_drivers"]) == 3
     assert all("name" in d and "contribution_pct" in d for d in rul["shap_drivers"])
+
+def test_department_profiles_list():
+    resp = client.get("/api/auth/departments")
+    assert resp.status_code == 200
+    depts = resp.json()
+    assert len(depts) == 5
+    dept_ids = [d["id"] for d in depts]
+    assert "fleet-command" in dept_ids
+    assert "health-diagnostics" in dept_ids
+    assert "tech-records" in dept_ids
+    assert "logistics-spares" in dept_ids
+    assert "maintenance-agency" in dept_ids
+
+    # Check Fleet Commander profile
+    cmd = next(d for d in depts if d["id"] == "fleet-command")
+    assert cmd["role"] == "Commander"
+    assert cmd["default_tab"] == "command-center"
+    assert "Aditya" in cmd["officer"]
+
+    # Check Maintenance Agency profile
+    mnt = next(d for d in depts if d["id"] == "maintenance-agency")
+    assert mnt["role"] == "Viewer"
+    assert mnt["default_tab"] == "work-orders"
+
+def test_department_login_2step_flow():
+    # 1. Step 1: Login with Department ID + demo password
+    login_resp = client.post("/api/auth/login", json={
+        "department_id": "logistics-spares",
+        "password": "AirDoctor@2026"
+    })
+    assert login_resp.status_code == 200
+    data = login_resp.json()
+    assert data["step"] == "totp_required"
+    assert data["department_id"] == "logistics-spares"
+    assert data["role"] == "Planner"
+    assert data["default_tab"] == "resource-optimizer"
+    assert len(data["demo_totp_code"]) == 6
+    otp_code = data["demo_totp_code"]
+
+    # 2. Step 2: Verify TOTP for department
+    verify_resp = client.post("/api/auth/verify-totp", json={
+        "department_id": "logistics-spares",
+        "totp_code": otp_code
+    })
+    assert verify_resp.status_code == 200
+    vdata = verify_resp.json()
+    assert vdata["verified"] is True
+    assert vdata["department_id"] == "logistics-spares"
+    assert vdata["role"] == "Planner"
+    assert vdata["default_tab"] == "resource-optimizer"
+    assert "access_token" in vdata
+
+def test_department_login_rejections():
+    # Invalid password
+    bad_pwd = client.post("/api/auth/login", json={
+        "department_id": "fleet-command",
+        "password": "WrongPassword123"
+    })
+    assert bad_pwd.status_code == 401
+    assert "Invalid department security key" in bad_pwd.json()["detail"]
+
+    # Invalid department ID
+    bad_dept = client.post("/api/auth/login", json={
+        "department_id": "unknown-department",
+        "password": "AirDoctor@2026"
+    })
+    assert bad_dept.status_code == 404
+
+    # Invalid OTP code in Step 2
+    bad_otp = client.post("/api/auth/verify-totp", json={
+        "department_id": "fleet-command",
+        "totp_code": "000000"
+    })
+    assert bad_otp.status_code == 400
+

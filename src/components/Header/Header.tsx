@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Bell, X, ShieldCheck, ChevronDown, User, Lock, Activity } from 'lucide-react';
+import { Search, Bell, X, ShieldCheck, ChevronDown, User, Lock, Activity, Building2 } from 'lucide-react';
 import { BaseId, UserRole } from '../../types/aircraft';
 import {
   ConnectionStatus,
@@ -18,6 +18,14 @@ interface HeaderProps {
   currentRole: UserRole;
   onRoleChange: (role: UserRole) => void;
   onOpenSecurityModal: () => void;
+  currentDepartment?: {
+    id: string;
+    name: string;
+    officer: string;
+    serviceId: string;
+    role: UserRole;
+  } | null;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,6 +34,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentRole,
   onRoleChange,
   onOpenSecurityModal,
+  currentDepartment,
+  onLogout,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
@@ -38,19 +48,19 @@ export const Header: React.FC<HeaderProps> = ({
 
   const roleLabels: Record<UserRole, { name: string; title: string; badge: string; color: string }> = {
     Commander: {
-      name: 'Wing Cmdr. Aditya',
+      name: currentDepartment?.role === 'Commander' ? currentDepartment.officer : 'Wing Cmdr. Aditya',
       title: 'Commander — Full Access',
       badge: 'COMMANDER',
       color: 'bg-emerald-700 text-white',
     },
     Planner: {
-      name: 'Sqn Ldr. Verma',
+      name: currentDepartment?.role === 'Planner' ? currentDepartment.officer : 'Sqn Ldr. Vikram',
       title: 'Planner — Verify & Simulate',
       badge: 'PLANNER',
       color: 'bg-blue-700 text-white',
     },
     Viewer: {
-      name: 'Flt Lt. Rao',
+      name: currentDepartment?.role === 'Viewer' ? currentDepartment.officer : 'MWO R. Sharma',
       title: 'Viewer — Read-Only',
       badge: 'VIEWER',
       color: 'bg-slate-700 text-white',
@@ -179,6 +189,34 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
+        {/* Active Department Silo Profile Badge (SIH MoD) */}
+        {currentDepartment && (
+          <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200/90 text-xs shadow-2xs">
+            <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <div className="text-left">
+              <span className="font-bold text-slate-800 truncate block max-w-[170px]" title={currentDepartment.name}>
+                {currentDepartment.name}
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">
+                {currentDepartment.serviceId} • {currentDepartment.officer.split('(')[0].trim()}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Switch Department / Lock Button */}
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50/80 hover:bg-rose-100 text-rose-800 text-xs font-bold transition-all shadow-2xs group cursor-pointer"
+            title="Lock session & Switch Department Role"
+          >
+            <Lock className="w-3.5 h-3.5 text-rose-600 group-hover:scale-105 transition-transform" />
+            <span className="hidden sm:inline">Switch Department / Lock</span>
+            <span className="sm:hidden">Lock</span>
+          </button>
+        )}
+
         {/* RBAC Role Switcher & User Profile Dropdown (Task 2) */}
         <div className="relative">
           <button
@@ -242,17 +280,30 @@ export const Header: React.FC<HeaderProps> = ({
                 );
               })}
 
-              <div className="pt-2 border-t border-slate-100 px-2 pb-1">
+              <div className="pt-2 border-t border-slate-100 px-2 pb-1 space-y-1">
                 <button
                   onClick={() => {
                     setShowRoleDropdown(false);
                     onOpenSecurityModal();
                   }}
-                  className="w-full py-1 text-center text-[11px] font-semibold text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1"
+                  className="w-full py-1 text-center text-[11px] font-semibold text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <ShieldCheck className="w-3.5 h-3.5" />
                   View Cybersecurity &amp; MFA Status
                 </button>
+
+                {onLogout && (
+                  <button
+                    onClick={() => {
+                      setShowRoleDropdown(false);
+                      onLogout();
+                    }}
+                    className="w-full py-1 text-center text-[11px] font-bold text-rose-600 hover:text-rose-800 flex items-center justify-center gap-1 cursor-pointer rounded-lg hover:bg-rose-50"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    Lock Session &amp; Switch Department
+                  </button>
+                )}
               </div>
             </div>
           )}

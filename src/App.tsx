@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Header } from './components/Header/Header';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { CommandCenterView } from './components/CommandCenter/CommandCenterView';
@@ -9,23 +9,58 @@ import { ResourceOptimizerView } from './components/Optimizer/ResourceOptimizerV
 import { WorkOrdersView } from './components/WorkOrders/WorkOrdersView';
 import { ReportsAnalyticsView } from './components/Reports/ReportsAnalyticsView';
 import { AiAssistantView } from './components/AiAssistant/AiAssistantView';
-import { BaseId, AircraftData, UserRole } from './types/aircraft';
+import { LoginGateView } from './components/Auth/LoginGateView';
+import { BaseId, AircraftData, UserRole, VerifyDepartmentTotpResponse } from './types/aircraft';
 import { mockAirDoctorService } from './services/mockAirDoctorService';
 import { api, setActiveUserRole } from './services/apiClient';
 import { SecurityModal } from './components/Security/SecurityModal';
 
+interface AuthSession {
+  departmentId: string;
+  departmentName: string;
+  officer: string;
+  serviceId: string;
+  role: UserRole;
+  defaultTab: string;
+  authenticatedAt: string;
+}
+
+const SESSION_STORAGE_KEY = 'airdoctor_auth_session';
+
+function getInitialSession(): AuthSession | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.departmentId && parsed?.role) {
+        return parsed;
+      }
+    }
+  } catch {
+    // sessionStorage fallback
+  }
+  return null;
+}
+
 export function App() {
-  const [activeNav, setActiveNav] = useState<string>('command-center');
+  const [authSession, setAuthSession] = useState<AuthSession | null>(getInitialSession);
+  const [activeNav, setActiveNav] = useState<string>(() => authSession?.defaultTab || 'command-center');
   const [selectedBaseId, setSelectedBaseId] = useState<BaseId>('all');
   const [selectedAircraftId, setSelectedAircraftId] = useState<string>('rafale');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [ledgerRevision, setLedgerRevision] = useState<number>(0);
-  const [currentRole, setCurrentRole] = useState<UserRole>('Commander');
+  const [currentRole, setCurrentRole] = useState<UserRole>(() => authSession?.role || 'Commander');
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
 
   const [currentAircraftList, setCurrentAircraftList] = useState<AircraftData[]>(() =>
     mockAirDoctorService.get3DAircraft(selectedBaseId)
   );
+
+  React.useEffect(() => {
+    if (authSession?.role) {
+      setActiveUserRole(authSession.role);
+    }
+  }, [authSession]);
 
   React.useEffect(() => {
     let active = true;
@@ -63,6 +98,69 @@ export function App() {
     setActiveUserRole(role);
   };
 
+  const handleDepartmentAuthenticated = (auth: VerifyDepartmentTotpResponse) => {
+    const sessionData: AuthSession = {
+      departmentId: auth.department_id,
+      departmentName: auth.department_name,
+      officer: auth.officer,
+      serviceId: auth.service_id,
+      role: auth.role,
+      defaultTab: auth.default_tab,
+      authenticatedAt: auth.authenticated_at,
+    };
+
+    try {
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+    } catch {
+      // storage fallback
+    }
+
+    setAuthSession(sessionData);
+    setCurrentRole(auth.role);
+    setActiveUserRole(auth.role);
+    setActiveNav(auth.default_tab);
+
+    // Record login entry in SHA-256 Decision Ledger
+    api.recordDecision({
+      actor: auth.officer,
+      action: 'USER_SESSION_AUTHENTICATED',
+      previous_state: 'UNAUTHENTICATED_PORTAL_GATE',
+      resulting_state: `Authenticated as ${auth.department_name} (${auth.role}) via 2-Step RFC 6238 TOTP`,
+      notes: `Identity cleared by MoD Department Security Directory (${auth.service_id}). Access granted to ${auth.default_tab} view with ${auth.role} clearance.`,
+      baseId: selectedBaseId,
+    }).catch(() => {
+      // ledger fallback
+    });
+    setLedgerRevision((prev) => prev + 1);
+  };
+
+  const handleLogout = () => {
+    try {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch {
+      // storage fallback
+    }
+
+    if (authSession) {
+      api.recordDecision({
+        actor: authSession.officer,
+        action: 'USER_SESSION_LOCKED',
+        previous_state: `Active Session: ${authSession.departmentName} (${authSession.role})`,
+        resulting_state: `Session locked for ${authSession.departmentName}. Returned to 2-Step Cybersecurity Gate.`,
+        notes: `User manual lock / switch department action. Session terminated. Department profile unmounted.`,
+        baseId: selectedBaseId,
+      }).catch(() => {});
+      setLedgerRevision((prev) => prev + 1);
+    }
+
+    setAuthSession(null);
+  };
+
+  // If unauthenticated, display the 2-Step Cybersecurity Login Gate first
+  if (!authSession) {
+    return <LoginGateView onAuthenticated={handleDepartmentAuthenticated} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-sans select-none text-slate-800">
       {/* 1. Header with Base Selector, Search & Operations Banner */}
@@ -75,6 +173,14 @@ export function App() {
         currentRole={currentRole}
         onRoleChange={handleRoleChange}
         onOpenSecurityModal={() => setIsSecurityModalOpen(true)}
+        currentDepartment={authSession ? {
+          id: authSession.departmentId,
+          name: authSession.departmentName,
+          officer: authSession.officer,
+          serviceId: authSession.serviceId,
+          role: authSession.role,
+        } : null}
+        onLogout={handleLogout}
       />
 
       {/* 2. Main Layout Container: Sidebar + Active Section */}
@@ -146,7 +252,7 @@ export function App() {
           )}
 
           {/* PAGE 6: Work Orders & Maintenance Scheduler (Image 2, 6/7) */}
-          {activeNav === 'work-orders' && (
+          {(activeNav === 'work-orders' || activeNav === 'maintenance-scheduler') && (
             <WorkOrdersView
               selectedBaseId={selectedBaseId}
               onSelectBase={handleSelectBase}

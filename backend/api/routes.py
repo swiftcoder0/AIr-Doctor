@@ -43,6 +43,9 @@ from backend.schemas import (
     VerifyTotpRequest,
     VerifyTotpResponse,
     VerifyChainResponse,
+    DepartmentProfile,
+    DepartmentLoginRequest,
+    DepartmentLoginResponse,
 )
 from backend.services.fleet_service import (
     get_all_bases,
@@ -58,6 +61,9 @@ from backend.services.security_service import (
     get_security_status,
     verify_totp_code,
     verify_rbac_write_permission,
+    DEPARTMENT_PROFILES,
+    authenticate_department_login,
+    verify_department_totp,
 )
 from backend.services.ledger_service import enrich_ledger_with_hashes, verify_ledger_chain
 
@@ -71,10 +77,31 @@ def get_auth_status():
     """Returns active security configuration (Argon2id, RFC 6238 TOTP, RBAC roles)."""
     return get_security_status()
 
+@router.get("/auth/departments", response_model=List[DepartmentProfile], tags=["Security"])
+def get_departments():
+    """Returns the 5 official Ministry of Defence SIH airbase department profiles."""
+    return DEPARTMENT_PROFILES
+
+@router.post("/auth/login", response_model=DepartmentLoginResponse, tags=["Security"])
+def login_department(req: DepartmentLoginRequest):
+    """
+    Step 1: Authenticates the selected department profile and password.
+    Returns totp_required status, department metadata, and live RFC 6238 demo OTP.
+    """
+    return authenticate_department_login(department_id=req.department_id, password=req.password)
+
 @router.post("/auth/verify-totp", response_model=VerifyTotpResponse, tags=["Security"])
 def verify_totp(req: VerifyTotpRequest):
-    """Validates a 6-digit TOTP code to unlock Commander step-up authorization."""
-    is_valid = verify_totp_code(req.code)
+    """Validates a 6-digit TOTP code to complete department sign-in or step-up authorization."""
+    totp = req.totp_code or req.code or ""
+    if not totp:
+        raise HTTPException(status_code=400, detail="TOTP code is required.")
+
+    if req.department_id:
+        res = verify_department_totp(department_id=req.department_id, totp_code=totp, role=req.role)
+        return VerifyTotpResponse(**res)
+
+    is_valid = verify_totp_code(totp)
     if not is_valid:
         raise HTTPException(
             status_code=400,
