@@ -97,11 +97,14 @@ export const StockAvailabilityMap: React.FC<StockAvailabilityMapProps> = ({
           attributionControl: false,
         });
 
-        // CartoDB Positron clean light tiles
-        const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-          maxZoom: 19,
-          subdomains: ['a', 'b', 'c', 'd'],
-        });
+        // ESRI World Light Gray Base - Free, clean, light aesthetic without any API key or watermarks
+        const tileLayer = L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+          {
+            maxZoom: 16,
+            attribution: '&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+          }
+        );
 
         tileLayer.on('tileerror', () => {
           // If network error, set graceful fallback

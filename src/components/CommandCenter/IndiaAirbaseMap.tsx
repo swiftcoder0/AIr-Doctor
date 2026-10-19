@@ -88,11 +88,14 @@ export const IndiaAirbaseMap: React.FC<IndiaAirbaseMapProps> = ({
         attributionControl: false,
       });
 
-      // CartoDB Positron Free Clean Light Tiles (Zero API Key required)
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-        subdomains: ['a', 'b', 'c', 'd'],
-      }).addTo(map);
+      // ESRI World Light Gray Base - Free, clean, light aesthetic without any API key or watermarks
+      L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxZoom: 16,
+          attribution: '&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+        }
+      ).addTo(map);
 
       mapInstanceRef.current = map;
     }
