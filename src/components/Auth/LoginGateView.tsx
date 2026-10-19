@@ -93,10 +93,32 @@ export const LoginGateView: React.FC<LoginGateViewProps> = ({ onAuthenticated })
     }
   }, [step, remainingSeconds === 30]);
 
+  const getDeptServiceId = (deptId: string): string => {
+    switch (deptId) {
+      case 'fleet-command':
+        return 'IAF-CMD-01';
+      case 'health-diagnostics':
+        return 'IAF-ENG-02';
+      case 'tech-records':
+        return 'IAF-REC-03';
+      case 'logistics-spares':
+        return 'IAF-LOG-04';
+      case 'maintenance-agency':
+        return 'IAF-MNT-05';
+      default:
+        return 'IAF-CMD-01';
+    }
+  };
+
+  // Synchronize Personnel ID whenever selected department changes
+  useEffect(() => {
+    setServiceId(getDeptServiceId(selectedDeptId));
+  }, [selectedDeptId]);
+
   // Handle department card selection from list below
   const handleSelectDepartment = (dept: DepartmentProfile) => {
     setSelectedDeptId(dept.id);
-    setServiceId(dept.serviceId);
+    setServiceId(getDeptServiceId(dept.id));
     setStep1Error(null);
   };
 

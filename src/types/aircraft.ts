@@ -356,11 +356,14 @@ export interface DepartmentProfile {
   name: string;
   officer: string;
   serviceId: string;
+  service_id?: string;
   role: UserRole;
   defaultTab: string;
+  default_tab?: string;
   description: string;
   badgeColor?: string;
   agencyLabel: string;
+  agency_label?: string;
 }
 
 export interface DepartmentLoginRequest {

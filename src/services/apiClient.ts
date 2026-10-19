@@ -393,7 +393,13 @@ export const api = {
   // -----------------------------------------------------------
   async getDepartments(): Promise<DepartmentProfile[]> {
     try {
-      return await fetchJson<DepartmentProfile[]>('/auth/departments');
+      const list = await fetchJson<any[]>('/auth/departments');
+      return list.map((d) => ({
+        ...d,
+        serviceId: d.serviceId || d.service_id,
+        defaultTab: d.defaultTab || d.default_tab,
+        agencyLabel: d.agencyLabel || d.agency_label,
+      }));
     } catch {
       return mockAirDoctorService.getDepartmentProfiles();
     }
