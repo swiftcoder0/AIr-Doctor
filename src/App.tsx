@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header/Header';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { CommandCenterView } from './components/CommandCenter/CommandCenterView';
@@ -14,11 +14,12 @@ import { BaseOperationsView } from './components/CommandCenter/BaseOperationsVie
 import { FleetOverviewView } from './components/CommandCenter/FleetOverviewView';
 import { CommandApprovalsView } from './components/CommandCenter/CommandApprovalsView';
 import { StrategicInsightsView } from './components/CommandCenter/StrategicInsightsView';
+import { DepartmentSetupWorkspaceView } from './components/DepartmentWorkspace/DepartmentSetupWorkspaceView';
+import { AccessRestrictedView } from './components/Security/AccessRestrictedView';
 import { BaseId, AircraftData, UserRole, VerifyDepartmentTotpResponse } from './types/aircraft';
 import { mockAirDoctorService } from './services/mockAirDoctorService';
 import { api, setActiveUserRole } from './services/apiClient';
 import { SecurityModal } from './components/Security/SecurityModal';
-
 
 interface AuthSession {
   departmentId: string;
@@ -31,6 +32,93 @@ interface AuthSession {
 }
 
 const SESSION_STORAGE_KEY = 'airdoctor_auth_session';
+const ACTIVE_NAV_STORAGE_KEY = 'airdoctor_active_nav';
+
+// Map each department to its authorized primary landing page
+export function getDepartmentLandingPage(departmentId: string): string {
+  switch (departmentId) {
+    case 'fleet-command':
+      return 'command-center';
+    case 'health-diagnostics':
+      return 'aircraft-health';
+    case 'tech-records':
+      return 'tech-records';
+    case 'logistics-spares':
+      return 'logistics-spares';
+    case 'maintenance-agency':
+      return 'maintenance-agency';
+    default:
+      return 'command-center';
+  }
+}
+
+// Strict department RBAC route permission matrix
+export const DEPARTMENT_ALLOWED_ROUTES: Record<string, string[]> = {
+  'fleet-command': [
+    'command-center',
+    'base-operations',
+    'fleet-overview',
+    'command-approvals',
+    'strategic-insights',
+    'reports',
+    'reports-analytics',
+    'ai-assistant',
+  ],
+  'health-diagnostics': [
+    'aircraft-health',
+    'digital-twin',
+    'component-analytics',
+    'ai-predictions',
+    'usage-simulator',
+    'diagnostic-cases',
+    'reports-health',
+    'reports',
+    'reports-analytics',
+    'ai-assistant',
+  ],
+  'tech-records': [
+    'tech-records',
+    'data-trust',
+    'data-import',
+    'verify-queue',
+    'audit-ledger',
+    'reports-tech',
+    'reports',
+    'reports-analytics',
+    'reports-ledger',
+    'ai-assistant',
+  ],
+  'logistics-spares': [
+    'logistics-spares',
+    'resource-optimizer',
+    'optimizer',
+    'spares-inventory',
+    'maintenance-logistics',
+    'logistics',
+    'transfers',
+    'reports-logistics',
+    'reports',
+    'reports-analytics',
+    'ai-assistant',
+  ],
+  'maintenance-agency': [
+    'maintenance-agency',
+    'work-orders',
+    'maintenance-scheduler',
+    'hangar-bays',
+    'rtf-schedule',
+    'reports-maintenance',
+    'reports',
+    'reports-analytics',
+    'ai-assistant',
+  ],
+};
+
+export function isRouteAuthorizedForDepartment(departmentId: string, route: string): boolean {
+  const allowed = DEPARTMENT_ALLOWED_ROUTES[departmentId];
+  if (!allowed) return false;
+  return allowed.includes(route);
+}
 
 function getInitialSession(): AuthSession | null {
   try {
@@ -49,7 +137,22 @@ function getInitialSession(): AuthSession | null {
 
 export function App() {
   const [authSession, setAuthSession] = useState<AuthSession | null>(getInitialSession);
-  const [activeNav, setActiveNav] = useState<string>(() => authSession?.defaultTab || 'command-center');
+
+  // Restore activeNav strictly respecting department permissions
+  const [activeNav, setActiveNav] = useState<string>(() => {
+    const sess = getInitialSession();
+    if (!sess) return 'command-center';
+    try {
+      const savedNav = sessionStorage.getItem(ACTIVE_NAV_STORAGE_KEY);
+      if (savedNav && isRouteAuthorizedForDepartment(sess.departmentId, savedNav)) {
+        return savedNav;
+      }
+    } catch {
+      // storage fallback
+    }
+    return getDepartmentLandingPage(sess.departmentId);
+  });
+
   const [selectedBaseId, setSelectedBaseId] = useState<BaseId>('all');
   const [selectedAircraftId, setSelectedAircraftId] = useState<string>('rafale');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -61,13 +164,13 @@ export function App() {
     mockAirDoctorService.get3DAircraft(selectedBaseId)
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (authSession?.role) {
       setActiveUserRole(authSession.role);
     }
   }, [authSession]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let active = true;
     api.get3DAircraft(selectedBaseId).then((data) => {
       if (active && data && data.length > 0) setCurrentAircraftList(data);
@@ -85,13 +188,24 @@ export function App() {
     }
   };
 
+  const handleNavChange = (newNav: string) => {
+    setActiveNav(newNav);
+    try {
+      sessionStorage.setItem(ACTIVE_NAV_STORAGE_KEY, newNav);
+    } catch {
+      // storage fallback
+    }
+  };
+
   const handleSelectAircraftAndNavigate = (aircraftId: string) => {
     if (aircraftId.toLowerCase().includes('tejas') || aircraftId.toUpperCase().startsWith('T')) {
       setSelectedAircraftId('tejas');
     } else {
       setSelectedAircraftId('rafale');
     }
-    setActiveNav('aircraft-health');
+    if (authSession && isRouteAuthorizedForDepartment(authSession.departmentId, 'aircraft-health')) {
+      handleNavChange('aircraft-health');
+    }
   };
 
   const handleLogDecisionCallback = () => {
@@ -104,18 +218,20 @@ export function App() {
   };
 
   const handleDepartmentAuthenticated = (auth: VerifyDepartmentTotpResponse) => {
+    const landingTab = getDepartmentLandingPage(auth.department_id);
     const sessionData: AuthSession = {
       departmentId: auth.department_id,
       departmentName: auth.department_name,
       officer: auth.officer,
       serviceId: auth.service_id,
       role: auth.role,
-      defaultTab: auth.default_tab,
+      defaultTab: landingTab,
       authenticatedAt: auth.authenticated_at,
     };
 
     try {
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+      sessionStorage.setItem(ACTIVE_NAV_STORAGE_KEY, landingTab);
     } catch {
       // storage fallback
     }
@@ -123,7 +239,7 @@ export function App() {
     setAuthSession(sessionData);
     setCurrentRole(auth.role);
     setActiveUserRole(auth.role);
-    setActiveNav(auth.default_tab);
+    setActiveNav(landingTab);
 
     // Record login entry in SHA-256 Decision Ledger
     api.recordDecision({
@@ -131,7 +247,7 @@ export function App() {
       action: 'USER_SESSION_AUTHENTICATED',
       previous_state: 'UNAUTHENTICATED_PORTAL_GATE',
       resulting_state: `Authenticated as ${auth.department_name} (${auth.role}) via 2-Step RFC 6238 TOTP`,
-      notes: `Identity cleared by MoD Department Security Directory (${auth.service_id}). Access granted to ${auth.default_tab} view with ${auth.role} clearance.`,
+      notes: `Identity cleared by MoD Department Security Directory (${auth.service_id}). Access granted to ${landingTab} view with ${auth.role} clearance.`,
       baseId: selectedBaseId,
     }).catch(() => {
       // ledger fallback
@@ -142,6 +258,7 @@ export function App() {
   const handleLogout = () => {
     try {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      sessionStorage.removeItem(ACTIVE_NAV_STORAGE_KEY);
     } catch {
       // storage fallback
     }
@@ -159,6 +276,8 @@ export function App() {
     }
 
     setAuthSession(null);
+    setActiveNav('command-center');
+    setCurrentRole('Commander');
   };
 
   // If unauthenticated, display the 2-Step Cybersecurity Login Gate first
@@ -166,15 +285,20 @@ export function App() {
     return <LoginGateView onAuthenticated={handleDepartmentAuthenticated} />;
   }
 
+  // Check if current activeNav is authorized for the active department session
+  const isAuthorized = isRouteAuthorizedForDepartment(authSession.departmentId, activeNav);
+
   return (
     <div className="h-screen max-h-screen bg-[#F8FAFC] flex font-sans select-none text-slate-800 overflow-hidden">
       {/* 1. Left Navigation Sidebar extending full height (100vh) */}
       <Sidebar
         activeNav={activeNav}
-        onNavChange={setActiveNav}
+        onNavChange={handleNavChange}
         selectedBaseId={selectedBaseId}
         onSelectBase={handleSelectBase}
         currentRole={currentRole}
+        currentDepartmentId={authSession.departmentId}
+        currentDepartmentName={authSession.departmentName}
         pendingApprovalsCount={5}
       />
 
@@ -186,129 +310,187 @@ export function App() {
           onSearchChange={setSearchQuery}
           selectedBaseId={selectedBaseId}
           onSelectBase={handleSelectBase}
-          onNavigateToAssistant={() => setActiveNav('ai-assistant')}
+          onNavigateToAssistant={() => handleNavChange('ai-assistant')}
           currentRole={currentRole}
           onRoleChange={handleRoleChange}
           onOpenSecurityModal={() => setIsSecurityModalOpen(true)}
-          currentDepartment={authSession ? {
+          currentDepartment={{
             id: authSession.departmentId,
             name: authSession.departmentName,
             officer: authSession.officer,
             serviceId: authSession.serviceId,
             role: authSession.role,
-          } : null}
+          }}
           onLogout={handleLogout}
         />
 
         {/* Scrollable Main Content Area */}
         <main className="flex-1 overflow-y-auto p-6 max-w-[1740px] mx-auto w-full">
-          {/* PAGE 1: Command Center (Commander) */}
-          {activeNav === 'command-center' && (
-            <CommandCenterView
-              selectedBaseId={selectedBaseId}
-              onSelectBase={handleSelectBase}
-              onSelectAircraftAndNavigate={handleSelectAircraftAndNavigate}
-              onNavigate={setActiveNav}
+          {/* Route Guard: If route is unauthorized for this department, display Access Restricted screen */}
+          {!isAuthorized ? (
+            <AccessRestrictedView
+              attemptedRoute={activeNav}
+              departmentId={authSession.departmentId}
+              departmentName={authSession.departmentName}
+              officer={authSession.officer}
+              serviceId={authSession.serviceId}
+              role={authSession.role}
+              permittedLandingRoute={getDepartmentLandingPage(authSession.departmentId)}
+              permittedLandingLabel={authSession.departmentName.split('(')[0].trim()}
+              onNavigateHome={() => handleNavChange(getDepartmentLandingPage(authSession.departmentId))}
+              onLogout={handleLogout}
             />
-          )}
+          ) : (
+            <>
+              {/* PAGE 1: Command Center (Fleet Command Only) */}
+              {activeNav === 'command-center' && (
+                <CommandCenterView
+                  selectedBaseId={selectedBaseId}
+                  onSelectBase={handleSelectBase}
+                  onSelectAircraftAndNavigate={handleSelectAircraftAndNavigate}
+                  onNavigate={handleNavChange}
+                />
+              )}
 
-          {/* Commander Subview: Base Operations */}
-          {activeNav === 'base-operations' && (
-            <BaseOperationsView
-              onNavigateToCommandCenter={() => setActiveNav('command-center')}
-            />
-          )}
+              {/* Commander Subview: Base Operations */}
+              {activeNav === 'base-operations' && (
+                <BaseOperationsView
+                  onNavigateToCommandCenter={() => handleNavChange('command-center')}
+                />
+              )}
 
-          {/* Commander Subview: Fleet Overview */}
-          {activeNav === 'fleet-overview' && (
-            <FleetOverviewView
-              onSelectAircraftAndNavigate={handleSelectAircraftAndNavigate}
-              onNavigateToCommandCenter={() => setActiveNav('command-center')}
-            />
-          )}
+              {/* Commander Subview: Fleet Overview */}
+              {activeNav === 'fleet-overview' && (
+                <FleetOverviewView
+                  onSelectAircraftAndNavigate={handleSelectAircraftAndNavigate}
+                  onNavigateToCommandCenter={() => handleNavChange('command-center')}
+                />
+              )}
 
-          {/* Commander Subview: Command Approvals */}
-          {activeNav === 'command-approvals' && (
-            <CommandApprovalsView
-              onNavigateToCommandCenter={() => setActiveNav('command-center')}
-            />
-          )}
+              {/* Commander Subview: Command Approvals */}
+              {activeNav === 'command-approvals' && (
+                <CommandApprovalsView
+                  onNavigateToCommandCenter={() => handleNavChange('command-center')}
+                />
+              )}
 
-          {/* Commander Subview: Strategic Insights */}
-          {activeNav === 'strategic-insights' && (
-            <StrategicInsightsView
-              onNavigateToCommandCenter={() => setActiveNav('command-center')}
-            />
-          )}
+              {/* Commander Subview: Strategic Insights */}
+              {activeNav === 'strategic-insights' && (
+                <StrategicInsightsView
+                  onNavigateToCommandCenter={() => handleNavChange('command-center')}
+                />
+              )}
 
-          {/* PAGE 2: Aircraft Health & 3D Digital Twin (Image 1, 2/4) */}
-          {(activeNav === 'aircraft-health' || activeNav === 'digital-twin') && (
-            <DigitalTwinView
-              aircraftList={currentAircraftList}
-              selectedAircraftId={selectedAircraftId}
-              onSelectAircraft={setSelectedAircraftId}
-              searchQuery={searchQuery}
-            />
-          )}
+              {/* PAGE 2: Aircraft Health & Diagnostics Workspace (3D Digital Twin, Analytics, Predictions, Simulator, Cases) */}
+              {(activeNav === 'aircraft-health' ||
+                activeNav === 'digital-twin' ||
+                activeNav === 'component-analytics' ||
+                activeNav === 'ai-predictions' ||
+                activeNav === 'usage-simulator' ||
+                activeNav === 'diagnostic-cases') && (
+                <DigitalTwinView
+                  aircraftList={currentAircraftList}
+                  selectedAircraftId={selectedAircraftId}
+                  onSelectAircraft={setSelectedAircraftId}
+                  searchQuery={searchQuery}
+                  activeNav={activeNav}
+                />
+              )}
 
-          {/* PAGE 3: Base Data Import & Data Trust (Image 1, 3/4) */}
-          {(activeNav === 'data-import' || activeNav === 'data-trust') && (
-            <DataTrustView
-              selectedBaseId={selectedBaseId}
-              onSelectBase={handleSelectBase}
-              onLogDecision={handleLogDecisionCallback}
-            />
-          )}
+              {/* Department Setup Workspaces for Technical Records, Logistics, Maintenance Agency */}
+              {activeNav === 'tech-records' && (
+                <DepartmentSetupWorkspaceView
+                  departmentId="tech-records"
+                  onNavigate={handleNavChange}
+                />
+              )}
 
-          {/* PAGE 4: Maintenance & Logistics (Image 1, 4/4) */}
-          {(activeNav === 'maintenance-logistics' || activeNav === 'logistics') && (
-            <LogisticsView
-              selectedBaseId={selectedBaseId}
-              onSelectBase={handleSelectBase}
-              onNavigate={setActiveNav}
-              onLogDecision={handleLogDecisionCallback}
-            />
-          )}
+              {activeNav === 'logistics-spares' && (
+                <DepartmentSetupWorkspaceView
+                  departmentId="logistics-spares"
+                  onNavigate={handleNavChange}
+                />
+              )}
 
-          {/* Resource Recovery Optimizer Sandbox */}
-          {(activeNav === 'resource-optimizer' || activeNav === 'optimizer') && (
-            <ResourceOptimizerView
-              onLogDecision={handleLogDecisionCallback}
-              onNavigate={setActiveNav}
-            />
-          )}
+              {activeNav === 'maintenance-agency' && (
+                <DepartmentSetupWorkspaceView
+                  departmentId="maintenance-agency"
+                  onNavigate={handleNavChange}
+                />
+              )}
 
-          {/* PAGE 5: Dedicated AI Assistant (Image 2, 5/7) */}
-          {activeNav === 'ai-assistant' && (
-            <AiAssistantView
-              selectedBaseId={selectedBaseId}
-              onNavigate={setActiveNav}
-              onLogDecision={handleLogDecisionCallback}
-            />
-          )}
+              {/* Technical Records Tools: Data Import, Trust Records & Verification */}
+              {(activeNav === 'data-import' || activeNav === 'data-trust' || activeNav === 'verify-queue') && (
+                <DataTrustView
+                  selectedBaseId={selectedBaseId}
+                  onSelectBase={handleSelectBase}
+                  onLogDecision={handleLogDecisionCallback}
+                />
+              )}
 
-          {/* PAGE 6: Work Orders & Maintenance Scheduler (Image 2, 6/7) */}
-          {(activeNav === 'work-orders' || activeNav === 'maintenance-scheduler') && (
-            <WorkOrdersView
-              selectedBaseId={selectedBaseId}
-              onSelectBase={handleSelectBase}
-              onLogDecision={handleLogDecisionCallback}
-            />
-          )}
+              {/* Logistics Tools: Spares Inventory & Transfers */}
+              {(activeNav === 'spares-inventory' ||
+                activeNav === 'maintenance-logistics' ||
+                activeNav === 'logistics' ||
+                activeNav === 'transfers') && (
+                <LogisticsView
+                  selectedBaseId={selectedBaseId}
+                  onSelectBase={handleSelectBase}
+                  onNavigate={handleNavChange}
+                  onLogDecision={handleLogDecisionCallback}
+                />
+              )}
 
-          {/* PAGE 7: Reports & Analytics */}
-          {(activeNav === 'reports' || activeNav === 'reports-analytics' || activeNav === 'reports-ledger') && (
-            <ReportsAnalyticsView
-              selectedBaseId={selectedBaseId}
-              onSelectBase={handleSelectBase}
-              onLogDecision={handleLogDecisionCallback}
-            />
+              {/* Logistics Tools: Resource Recovery Optimizer */}
+              {(activeNav === 'resource-optimizer' || activeNav === 'optimizer') && (
+                <ResourceOptimizerView
+                  onLogDecision={handleLogDecisionCallback}
+                  onNavigate={handleNavChange}
+                />
+              )}
+
+              {/* Maintenance Agency Tools: Work Orders, Hangar Bays, RTF Schedule */}
+              {(activeNav === 'work-orders' ||
+                activeNav === 'maintenance-scheduler' ||
+                activeNav === 'hangar-bays' ||
+                activeNav === 'rtf-schedule') && (
+                <WorkOrdersView
+                  selectedBaseId={selectedBaseId}
+                  onSelectBase={handleSelectBase}
+                  onLogDecision={handleLogDecisionCallback}
+                />
+              )}
+
+              {/* Dedicated AI Assistant */}
+              {activeNav === 'ai-assistant' && (
+                <AiAssistantView
+                  selectedBaseId={selectedBaseId}
+                  onNavigate={handleNavChange}
+                  onLogDecision={handleLogDecisionCallback}
+                />
+              )}
+
+              {/* Reports & Analytics (Department Authorized Reports & Audit Ledger) */}
+              {(activeNav === 'reports' ||
+                activeNav === 'reports-analytics' ||
+                activeNav === 'reports-health' ||
+                activeNav === 'reports-tech' ||
+                activeNav === 'reports-logistics' ||
+                activeNav === 'reports-maintenance' ||
+                activeNav === 'audit-ledger' ||
+                activeNav === 'reports-ledger') && (
+                <ReportsAnalyticsView
+                  selectedBaseId={selectedBaseId}
+                  onSelectBase={handleSelectBase}
+                  onLogDecision={handleLogDecisionCallback}
+                />
+              )}
+            </>
           )}
         </main>
-
       </div>
 
-      {/* Cybersecurity & TOTP MFA Modal (Task 2) */}
+      {/* Cybersecurity & TOTP MFA Modal */}
       <SecurityModal
         isOpen={isSecurityModalOpen}
         onClose={() => setIsSecurityModalOpen(false)}

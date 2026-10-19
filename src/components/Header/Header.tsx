@@ -168,14 +168,14 @@ export const Header: React.FC<HeaderProps> = ({
             title="User Profile & Department Options"
           >
             <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
-              A
+              {currentDepartment?.officer ? currentDepartment.officer.charAt(0) : 'A'}
             </div>
             <div className="text-left hidden md:block">
               <div className="text-xs font-bold text-slate-900 leading-tight">
-                {roleLabels[currentRole].name}
+                {currentDepartment?.officer ? currentDepartment.officer.split('(')[0].trim() : roleLabels[currentRole].name}
               </div>
               <div className="text-[10px] text-slate-500 font-medium leading-tight">
-                {roleLabels[currentRole].title}
+                {currentDepartment?.name ? currentDepartment.name.split('(')[0].trim() : roleLabels[currentRole].title}
               </div>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -183,41 +183,23 @@ export const Header: React.FC<HeaderProps> = ({
 
           {showRoleDropdown && (
             <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50 text-xs text-slate-800 space-y-1">
-              <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                Active Persona
+              <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 flex items-center justify-between">
+                <span>Active Department Session</span>
+                <span className="text-blue-600 font-mono text-[9px]">{currentDepartment?.serviceId || 'IAF'}</span>
               </div>
 
-              {(['Commander', 'Planner', 'Viewer'] as UserRole[]).map((r) => {
-                const info = roleLabels[r];
-                const active = currentRole === r;
-                return (
-                  <button
-                    key={r}
-                    onClick={() => {
-                      onRoleChange(r);
-                      setShowRoleDropdown(false);
-                    }}
-                    className={`w-full p-2.5 rounded-xl text-left flex items-start justify-between transition-all ${
-                      active
-                        ? 'bg-blue-50 text-blue-900 font-bold border border-blue-200'
-                        : 'hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-bold flex items-center gap-1.5">
-                        {r === 'Viewer' && <Lock className="w-3 h-3 text-red-500" />}
-                        {info.name}
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-normal mt-0.5">
-                        {info.title}
-                      </div>
-                    </div>
-                    {active && (
-                      <span className="w-2 h-2 rounded-full bg-blue-600 mt-1.5"></span>
-                    )}
-                  </button>
-                );
-              })}
+              {currentDepartment && (
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-xs space-y-1">
+                  <div className="font-bold text-slate-900">{currentDepartment.name.split('(')[0].trim()}</div>
+                  <div className="text-slate-600 text-[11px] font-medium">{currentDepartment.officer}</div>
+                  <div className="flex items-center justify-between pt-1 text-[10px] text-slate-500 font-mono">
+                    <span>Clearance:</span>
+                    <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                      {currentDepartment.role}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="pt-2 border-t border-slate-100 px-2 pb-1 space-y-1">
                 <button

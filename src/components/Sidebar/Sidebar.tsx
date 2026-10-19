@@ -6,16 +6,34 @@ import {
   Wrench,
   Sliders,
   BarChart2,
-  Bot,
   ClipboardList,
   Building2,
   ShieldCheck,
   TrendingUp,
   ChevronDown,
+  Cpu,
+  Brain,
+  Activity,
+  FileText,
+  CheckSquare,
+  Lock,
+  Boxes,
+  Package,
+  Truck,
+  Warehouse,
+  CalendarCheck,
 } from 'lucide-react';
 import { BaseId, UserRole } from '../../types/aircraft';
 import { baseList } from '../../data/aircraftData';
 import iafFighterImg from '../../assets/iaf_fighter_tarmac.jpg';
+
+interface SidebarNavItem {
+  id: string;
+  label: string;
+  sublabel: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: number;
+}
 
 interface SidebarProps {
   activeNav: string;
@@ -23,6 +41,8 @@ interface SidebarProps {
   selectedBaseId: BaseId;
   onSelectBase: (base: BaseId) => void;
   currentRole?: UserRole;
+  currentDepartmentId?: string;
+  currentDepartmentName?: string;
   pendingApprovalsCount?: number;
 }
 
@@ -32,12 +52,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedBaseId,
   onSelectBase,
   currentRole = 'Commander',
+  currentDepartmentId = 'fleet-command',
   pendingApprovalsCount = 5,
 }) => {
   const [showBaseDropdown, setShowBaseDropdown] = React.useState(false);
 
-  // Commander navigation matching the requirements
-  const commanderNavItems = [
+  // 1. Air Fleet Command Navigation (Commander)
+  const fleetCommandNavItems: SidebarNavItem[] = [
     {
       id: 'command-center',
       label: 'Command Center',
@@ -77,20 +98,199 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
-  // Standard navigation for other roles (Planner / Viewer)
-  const standardNavItems = [
-    { id: 'command-center', label: 'Command Center', icon: LayoutDashboard },
-    { id: 'aircraft-health', label: 'Aircraft Health', icon: Plane },
-    { id: 'data-import', label: 'Data Import', icon: Database },
-    { id: 'maintenance-logistics', label: 'Maintenance', icon: Wrench },
-    { id: 'resource-optimizer', label: 'Resource Optimizer', icon: Sliders },
-    { id: 'work-orders', label: 'Work Orders', icon: ClipboardList },
-    { id: 'reports-analytics', label: 'Reports', icon: BarChart2 },
-    { id: 'ai-assistant', label: 'AI Assistant', icon: Bot },
+  // 2. Aircraft Health & Diagnostics Navigation (NO Command Center!)
+  const healthDiagnosticsNavItems: SidebarNavItem[] = [
+    {
+      id: 'aircraft-health',
+      label: 'Aircraft Health',
+      sublabel: '3D twin & telemetry',
+      icon: Plane,
+    },
+    {
+      id: 'component-analytics',
+      label: 'Component Analytics',
+      sublabel: 'Subsystem performance',
+      icon: Cpu,
+    },
+    {
+      id: 'ai-predictions',
+      label: 'AI Predictions',
+      sublabel: 'RUL & failure risk',
+      icon: Brain,
+    },
+    {
+      id: 'usage-simulator',
+      label: 'Usage Simulator',
+      sublabel: 'Flight-hours projection',
+      icon: Activity,
+    },
+    {
+      id: 'diagnostic-cases',
+      label: 'Diagnostic Cases',
+      sublabel: 'Flagged anomalies',
+      icon: ClipboardList,
+    },
+    {
+      id: 'reports-health',
+      label: 'Health Reports',
+      sublabel: 'Engineering analytics',
+      icon: BarChart2,
+    },
   ];
 
-  const isCommander = currentRole === 'Commander';
+  // 3. Technical Records & Quality Assurance Navigation (NO Command Center!)
+  const techRecordsNavItems: SidebarNavItem[] = [
+    {
+      id: 'tech-records',
+      label: 'Technical Records & QA',
+      sublabel: 'Logbooks & compliance',
+      icon: FileText,
+    },
+    {
+      id: 'data-import',
+      label: 'Data Import & QA',
+      sublabel: 'CSV ingestion & parsing',
+      icon: Database,
+    },
+    {
+      id: 'verify-queue',
+      label: 'Verify-First Queue',
+      sublabel: 'Flagged records audit',
+      icon: CheckSquare,
+    },
+    {
+      id: 'audit-ledger',
+      label: 'Audit Ledger',
+      sublabel: 'Cryptographic chain',
+      icon: Lock,
+    },
+    {
+      id: 'reports-tech',
+      label: 'QA Reports',
+      sublabel: 'Data trust & audits',
+      icon: BarChart2,
+    },
+  ];
+
+  // 4. Logistics & Spares Depot Navigation (NO Command Center!)
+  const logisticsSparesNavItems: SidebarNavItem[] = [
+    {
+      id: 'logistics-spares',
+      label: 'Logistics & Spares',
+      sublabel: 'Depot & supply matrix',
+      icon: Boxes,
+    },
+    {
+      id: 'resource-optimizer',
+      label: 'Resource Optimizer',
+      sublabel: '+1 What-If recovery',
+      icon: Sliders,
+    },
+    {
+      id: 'spares-inventory',
+      label: 'Spares Inventory',
+      sublabel: 'Critical parts depot',
+      icon: Package,
+    },
+    {
+      id: 'transfers',
+      label: 'Cross-Base Transfers',
+      sublabel: 'Airbase transit logs',
+      icon: Truck,
+    },
+    {
+      id: 'reports-logistics',
+      label: 'Logistics Reports',
+      sublabel: 'Supply chain analytics',
+      icon: BarChart2,
+    },
+  ];
+
+  // 5. Maintenance Agency Navigation (NO Command Center!)
+  const maintenanceAgencyNavItems: SidebarNavItem[] = [
+    {
+      id: 'maintenance-agency',
+      label: 'Maintenance Agency',
+      sublabel: 'Hangar floor control',
+      icon: Wrench,
+    },
+    {
+      id: 'work-orders',
+      label: 'Work Orders',
+      sublabel: 'Active servicing queue',
+      icon: ClipboardList,
+    },
+    {
+      id: 'hangar-bays',
+      label: 'Hangar Bays',
+      sublabel: 'Bay occupancy & status',
+      icon: Warehouse,
+    },
+    {
+      id: 'rtf-schedule',
+      label: 'Ready-to-Fly Schedule',
+      sublabel: 'Sortie gate inspections',
+      icon: CalendarCheck,
+    },
+    {
+      id: 'reports-maintenance',
+      label: 'Maintenance Reports',
+      sublabel: 'Depot turnaround stats',
+      icon: BarChart2,
+    },
+  ];
+
+  // Select navigation set strictly based on authenticated department
+  const getNavItems = (): SidebarNavItem[] => {
+    switch (currentDepartmentId) {
+      case 'health-diagnostics':
+        return healthDiagnosticsNavItems;
+      case 'tech-records':
+        return techRecordsNavItems;
+      case 'logistics-spares':
+        return logisticsSparesNavItems;
+      case 'maintenance-agency':
+        return maintenanceAgencyNavItems;
+      case 'fleet-command':
+      default:
+        // If commander role or default fleet-command
+        if (currentRole === 'Commander' || currentDepartmentId === 'fleet-command') {
+          return fleetCommandNavItems;
+        }
+        return fleetCommandNavItems;
+    }
+  };
+
+  const navItems = getNavItems();
+
+  const departmentSubtitleMap: Record<string, string> = {
+    'fleet-command': 'FLEET COMMAND',
+    'health-diagnostics': 'DIAGNOSTICS CELL',
+    'tech-records': 'TECH RECORDS & QA',
+    'logistics-spares': 'LOGISTICS DEPOT',
+    'maintenance-agency': 'MAINTENANCE AGENCY',
+  };
+
+  const departmentSubtitle =
+    departmentSubtitleMap[currentDepartmentId] ||
+    (currentRole === 'Commander' ? 'FLEET COMMAND' : 'AEROSPACE SUITE');
+
   const currentBase = baseList.find((b) => b.id === selectedBaseId) || baseList[0];
+
+  const isNavActive = (itemId: string): boolean => {
+    if (activeNav === itemId) return true;
+    if (itemId === 'reports' && (activeNav === 'reports' || activeNav === 'reports-analytics')) return true;
+    if (itemId === 'reports-health' && (activeNav === 'reports-health' || activeNav === 'reports')) return true;
+    if (itemId === 'reports-tech' && (activeNav === 'reports-tech' || activeNav === 'reports')) return true;
+    if (itemId === 'reports-logistics' && (activeNav === 'reports-logistics' || activeNav === 'reports')) return true;
+    if (itemId === 'reports-maintenance' && (activeNav === 'reports-maintenance' || activeNav === 'reports')) return true;
+    if (itemId === 'aircraft-health' && (activeNav === 'aircraft-health' || activeNav === 'digital-twin')) return true;
+    if (itemId === 'data-import' && (activeNav === 'data-import' || activeNav === 'data-trust')) return true;
+    if (itemId === 'resource-optimizer' && (activeNav === 'resource-optimizer' || activeNav === 'optimizer')) return true;
+    if (itemId === 'work-orders' && (activeNav === 'work-orders' || activeNav === 'maintenance-scheduler')) return true;
+    if (itemId === 'spares-inventory' && (activeNav === 'spares-inventory' || activeNav === 'maintenance-logistics' || activeNav === 'logistics')) return true;
+    return false;
+  };
 
   return (
     <aside className="w-64 h-screen flex flex-col justify-between py-4 px-3 select-none text-white z-20 shrink-0 overflow-hidden relative border-r border-slate-800/80 bg-[#0F172A]">
@@ -110,7 +310,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Top Section: Brand & Nav Links */}
       <div className="relative z-10 space-y-4">
-        {/* Exact AirDoctor Logo matching existing specification */}
+        {/* Exact AirDoctor Logo */}
         <div className="flex items-center gap-2.5 px-3 py-1">
           <div className="w-9 h-9 rounded-xl bg-blue-600/25 text-blue-400 border border-blue-500/40 flex items-center justify-center shadow-inner backdrop-blur-xs">
             <svg
@@ -129,77 +329,48 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="text-base font-black tracking-tight text-white leading-none drop-shadow-xs">
               AirDoctor
             </div>
-            <div className="text-[10px] font-mono text-slate-300 mt-0.5">
-              {isCommander ? 'FLEET COMMAND' : 'AEROSPACE SUITE'}
+            <div className="text-[10px] font-mono text-slate-300 mt-0.5 uppercase tracking-wider font-semibold">
+              {departmentSubtitle}
             </div>
           </div>
         </div>
 
-        {/* Navigation Items */}
+        {/* Department-Specific Navigation Items */}
         <nav className="space-y-1">
-          {isCommander ? (
-            // Commander Navigation Items
-            commanderNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive =
-                activeNav === item.id ||
-                (item.id === 'reports' && (activeNav === 'reports' || activeNav === 'reports-analytics'));
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onNavChange(item.id)}
-                  className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold transition-all backdrop-blur-xs ${
-                    isActive
-                      ? 'bg-blue-600/30 text-blue-300 border border-blue-400/50 shadow-xs font-bold'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 truncate text-left">
-                    <Icon
-                      className={`w-4 h-4 shrink-0 transition-colors ${
-                        isActive ? 'text-blue-400' : 'text-slate-400'
-                      }`}
-                    />
-                    <div>
-                      <div className="truncate font-bold leading-none text-xs">{item.label}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 font-normal truncate">
-                        {item.sublabel}
-                      </div>
-                    </div>
-                  </div>
-                  {item.badge !== undefined && item.badge > 0 && (
-                    <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-red-500 text-white shadow-xs shrink-0">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })
-          ) : (
-            // Standard Navigation for Other Departments
-            standardNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeNav === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onNavChange(item.id)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all backdrop-blur-xs ${
-                    isActive
-                      ? 'bg-blue-600/30 text-blue-300 border border-blue-400/50 shadow-xs font-bold'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/50'
-                  }`}
-                >
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = isNavActive(item.id);
+            return (
+              <button
+                key={item.id}
+                onClick={() => onNavChange(item.id)}
+                className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold transition-all backdrop-blur-xs cursor-pointer ${
+                  active
+                    ? 'bg-blue-600/30 text-blue-300 border border-blue-400/50 shadow-xs font-bold'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-3 truncate text-left">
                   <Icon
                     className={`w-4 h-4 shrink-0 transition-colors ${
-                      isActive ? 'text-blue-400' : 'text-slate-400'
+                      active ? 'text-blue-400' : 'text-slate-400'
                     }`}
                   />
-                  <span className="truncate">{item.label}</span>
-                </button>
-              );
-            })
-          )}
+                  <div>
+                    <div className="truncate font-bold leading-none text-xs">{item.label}</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5 font-normal truncate">
+                      {item.sublabel}
+                    </div>
+                  </div>
+                </div>
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-black bg-red-500 text-white shadow-xs shrink-0">
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </nav>
       </div>
 
@@ -212,7 +383,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </label>
           <button
             onClick={() => setShowBaseDropdown(!showBaseDropdown)}
-            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-slate-900/80 hover:bg-slate-900/95 border border-slate-700/70 rounded-xl text-xs font-bold text-slate-100 backdrop-blur-xs transition-colors shadow-xs"
+            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-slate-900/80 hover:bg-slate-900/95 border border-slate-700/70 rounded-xl text-xs font-bold text-slate-100 backdrop-blur-xs transition-colors shadow-xs cursor-pointer"
           >
             <span className="truncate">{currentBase.name}</span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
@@ -230,7 +401,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onSelectBase(base.id);
                     setShowBaseDropdown(false);
                   }}
-                  className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-700/60 transition-colors ${
+                  className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-700/60 transition-colors cursor-pointer ${
                     selectedBaseId === base.id ? 'bg-blue-950/70 text-blue-400 font-bold' : 'text-slate-300'
                   }`}
                 >

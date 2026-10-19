@@ -38,12 +38,14 @@ interface DigitalTwinViewProps {
   selectedAircraftId: string;
   onSelectAircraft: (id: string) => void;
   searchQuery: string;
+  activeNav?: string;
 }
 
 export const DigitalTwinView: React.FC<DigitalTwinViewProps> = ({
   aircraftList,
   selectedAircraftId,
   onSelectAircraft,
+  activeNav,
 }) => {
   // Navigation / Selection State
   const [selectedCompId, setSelectedCompId] = useState<string>('engine');
@@ -58,6 +60,25 @@ export const DigitalTwinView: React.FC<DigitalTwinViewProps> = ({
 
   // Modals & Drawers
   const [isCaseModalOpen, setIsCaseModalOpen] = useState<boolean>(false);
+
+  // Synchronize tabs with department sub-navigation
+  React.useEffect(() => {
+    if (activeNav === 'component-analytics') {
+      setActiveTab('Sensor Data');
+    } else if (activeNav === 'ai-predictions') {
+      setActiveTab('AI Prediction');
+    } else if (activeNav === 'diagnostic-cases') {
+      setIsCaseModalOpen(true);
+    } else if (activeNav === 'usage-simulator') {
+      setActiveTab('Overview');
+      setTimeout(() => {
+        const el = document.getElementById('usage-simulator-section');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    } else if (activeNav === 'aircraft-health' || activeNav === 'digital-twin') {
+      setActiveTab('Overview');
+    }
+  }, [activeNav]);
   const [caseCreatedToast, setCaseCreatedToast] = useState<string | null>(null);
   const [showAiDrawer, setShowAiDrawer] = useState<boolean>(false);
   const [chatInput, setChatInput] = useState<string>('');
@@ -879,7 +900,7 @@ export const DigitalTwinView: React.FC<DigitalTwinViewProps> = ({
         </div>
 
         {/* Usage Scenario Simulator */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)] p-4 flex flex-col justify-between">
+        <div id="usage-simulator-section" className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)] p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <h3 className="text-xs font-black text-slate-900">Usage Scenario Simulator</h3>
